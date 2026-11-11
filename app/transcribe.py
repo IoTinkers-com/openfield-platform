@@ -7,6 +7,6 @@ router = APIRouter()
 
 
 @router.post("/transcribe")
-async def transcribe_audio(file: UploadFile = File(...)):
+async def transcribe_audio(file: UploadFile = File(...), engine: str | None = None):
     audio = await file.read()
-    return transcribe(audio)
+    return transcribe(audio, engine)

@@ -23,11 +23,15 @@ services:
     environment:
       DATABASE_URL: postgresql://openfield:openfield@db:5432/openfield
       MEDIA_DIR: /data/media
+      HF_HOME: /cache/huggingface
+      WHISPER_MODEL: base
     ports:
       - "8000:8000"
     volumes:
       - media:/data/media
+      - hf_cache:/cache/huggingface
 
 volumes:
   dbdata:
   media:
+  hf_cache:
