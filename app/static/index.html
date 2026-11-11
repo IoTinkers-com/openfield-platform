@@ -13,6 +13,7 @@
   .card { border: 1px solid #ddd; padding: 6px; width: 160px; }
   .card img { width: 100%; height: 100px; object-fit: cover; background: #eee; }
   .card .id { font-size: 0.75rem; color: #555; word-break: break-all; }
+  .card .placeholder { height: 100px; background: #e5e7eb; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 0.75rem; }
 </style>
 </head>
 <body>
@@ -41,6 +42,12 @@ async function load() {
       const img = document.createElement('img');
       img.src = href;
       img.alt = d.id;
+      img.onerror = () => {
+        const ph = document.createElement('div');
+        ph.className = 'placeholder';
+        ph.textContent = 'sin imagen';
+        img.replaceWith(ph);
+      };
       card.appendChild(img);
     }
     const label = document.createElement('div');
