@@ -51,6 +51,7 @@ app.include_router(transcribe_router)
 _STATIC = Path(__file__).parent / "static"
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
 app.mount("/static", StaticFiles(directory=str(_STATIC)), name="static")
+app.mount("/capture", StaticFiles(directory=str(_STATIC / "pwa"), html=True), name="capture")
 
 
 @app.get("/")

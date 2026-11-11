@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest">
+<title>OpenField · Captura</title>
+<style>
+  body { font-family: sans-serif; margin: 1rem; max-width: 720px; }
+  video { width: 100%; max-width: 480px; border-radius: 6px; background: #000; }
+  .row { margin: 0.75rem 0; }
+  .indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #ccc; margin-right: 6px; }
+  .indicator.on { background: #e11; }
+  #status { color: #333; font-size: 1rem; font-weight: 600; min-height: 1.4rem; margin: 0.5rem 0; }
+  button { padding: 0.5rem 1rem; margin-right: 0.5rem; }
+  button:disabled { opacity: 0.5; }
+  #log { white-space: pre-wrap; font-family: monospace; font-size: 0.8rem; background: #f5f5f5; padding: 0.5rem; min-height: 3rem; }
+</style>
+</head>
+<body>
+<h1>OpenField · Captura</h1>
+<div class="row">
+  <label><input type="checkbox" id="consent"> Acepto el registro de captura</label>
+  <span class="indicator" id="indicator" title="Indicador de grabación (D15)"></span>
+</div>
+<div class="row"><video id="preview" autoplay playsinline muted></video></div>
+<div class="row">
+  <button id="start" disabled>Iniciar sesión</button>
+  <button id="capture" disabled>Capturar foto</button>
+  <label>Audio (s): <input id="duration" type="number" min="1" max="120" value="3" style="width:3.5rem"></label>
+  <button id="audio" disabled>Nota de audio</button>
+  <button id="sync" disabled>Sincronizar (0)</button>
+</div>
+<div id="status"></div>
+<h2>Log</h2>
+<div id="log"></div>
+
+<script type="module">
+// Mismo origen (servida por la plataforma): la API está en el mismo host.
+import { webHardware } from "./hardware/web.js";
+import { createDevice, startSession, captureImage, recordAudio } from "./capture.js";
+import { uploadMedia, ingest, transcribeAudio } from "./sync.js";
+import { newId } from "./ids.js";
+
+const BASE_URL = ""; // mismo origen
+const hw = webHardware();
+const queue = []; // { kind: "media", doc, blob } | { kind: "doc", entity, doc }
+let session = null;
+let assetLocation = null; // fallback interior (D2: QR/TAG del activo)
+const deviceId = newId("dev");
+let stream = null;
+
+const $ = (id) => document.getElementById(id);
+const log = (msg) => { $("log").textContent += msg + "\n"; };
+
+$("consent").addEventListener("change", () => {
+  const on = $("consent").checked;
+  $("indicator").className = "indicator" + (on ? " on" : "");
+  $("start").disabled = !on;
+});
+
+$("start").addEventListener("click", async () => {
+  session = await startSession({ deviceId, assetId: "asset-001" }, hw);
+  queue.push({ kind: "doc", entity: "device", doc: createDevice(deviceId, hw) });
+  queue.push({ kind: "doc", entity: "session", doc: session });
+  log("sesión iniciada: " + session.id);
+  try {
+    const res = await fetch(`${BASE_URL}/documents/asset-001`);
+    if (res.ok) assetLocation = (await res.json()).location || null;
+  } catch {}
+  try {
+    if (stream) stream.getTracks().forEach((t) => t.stop()); // libera cámara previa
+    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    $("preview").srcObject = stream;
+    $("capture").disabled = false;
+    $("audio").disabled = false;
+    $("sync").disabled = false;
+  } catch (e) {
+    log("cámara no disponible: " + e.message + " (permite el acceso a la cámara)");
+  }
+});
+
+$("capture").addEventListener("click", async () => {
+  try {
+    const img = await hw.captureImage($("preview")); // reusa el stream del preview
+    const loc = await hw.getLocation();
+    const doc = await captureImage({ sessionId: session.id, assetId: "asset-001", href: img.href, geometry: loc || assetLocation }, hw);
+    queue.push({ kind: "media", doc, blob: img.blob });
+    $("sync").textContent = `Sincronizar (${queue.length})`;
+    log("foto capturada: " + doc.id + (loc ? " (GPS)" : assetLocation ? " (ubicación del activo)" : " (sin ubicación)"));
+  } catch (e) { log("error al capturar: " + e.message); }
+});
+
+$("audio").addEventListener("click", async () => {
+  const status = $("status");
+  const btn = $("audio");
+  btn.disabled = true;
+  try {
+    const secs = parseInt($("duration").value, 10) || 3;
+    status.textContent = "🔴 Grabando… (" + secs + " s) — habla";
+    const audio = await hw.recordAudio(secs * 1000); // graba y devuelve { blob }
+    status.textContent = "⏳ Transcribiendo…";
+    const result = await transcribeAudio(audio.blob, BASE_URL); // { text, engine }
+    const doc = recordAudio({ sessionId: session.id, assetId: "asset-001", engine: result.engine || "stub", text: result.text || "(sin transcripción)" });
+    queue.push({ kind: "doc", entity: "transcript", doc });
+    $("sync").textContent = `Sincronizar (${queue.length})`;
+    status.textContent = "✅ Transcrito (motor " + doc.engine + "): " + doc.text;
+    log("transcripción: " + doc.id + " (motor " + doc.engine + ")");
+  } catch (e) {
+    status.textContent = "❌ Error: " + e.message;
+    log("error audio: " + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("sync").addEventListener("click", async () => {
+  const items = queue.splice(0, queue.length);
+  for (const item of items) {
+    try {
+      if (item.kind === "media") {
+        const up = await uploadMedia(item.blob, item.doc.id + ".jpg", BASE_URL);
+        item.doc.assets.primary.href = up.href;
+        await ingest("media-item", item.doc, BASE_URL);
+      } else {
+        await ingest(item.entity, item.doc, BASE_URL);
+      }
+      log("ok: " + item.doc.id);
+    } catch (e) {
+      log("error: " + e.message);
+      queue.push(item); // reintentar luego (D4)
+    }
+  }
+  $("sync").textContent = `Sincronizar (${queue.length})`;
+});
+</script>
+</body>
+</html>
