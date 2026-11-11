@@ -24,9 +24,9 @@ export function webHardware() {
       if (!("geolocation" in navigator)) return null;
       return new Promise((resolve) => {
         navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lon: pos.coords.longitude, lat: pos.coords.latitude }),
+          (pos) => resolve({ lon: pos.coords.longitude, lat: pos.coords.latitude, accuracy: pos.coords.accuracy }),
           () => resolve(null),
-          { enableHighAccuracy: true, timeout: 10000 },
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
         );
       });
     },

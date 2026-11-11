@@ -26,6 +26,7 @@
 <div class="row"><video id="preview" autoplay playsinline muted></video></div>
 <div class="row">
   <button id="start" disabled>Iniciar sesión</button>
+  <label>Cámara: <select id="camera"><option value="environment">Trasera</option><option value="user">Frontal</option></select></label>
   <button id="capture" disabled>Capturar foto</button>
   <label>Audio (s): <input id="duration" type="number" min="1" max="120" value="3" style="width:3.5rem"></label>
   <button id="audio" disabled>Nota de audio</button>
@@ -59,6 +60,15 @@ $("consent").addEventListener("change", () => {
   $("start").disabled = !on;
 });
 
+$("camera").addEventListener("change", async () => {
+  if (!stream) return;
+  stream.getTracks().forEach((t) => t.stop());
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: $("camera").value } } });
+    $("preview").srcObject = stream;
+  } catch (e) { log("cámara no disponible: " + e.message); }
+});
+
 $("start").addEventListener("click", async () => {
   session = await startSession({ deviceId, assetId: "asset-001" }, hw);
   queue.push({ kind: "doc", entity: "device", doc: createDevice(deviceId, hw) });
@@ -70,7 +80,7 @@ $("start").addEventListener("click", async () => {
   } catch {}
   try {
     if (stream) stream.getTracks().forEach((t) => t.stop()); // libera cámara previa
-    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: $("camera").value } } });
     $("preview").srcObject = stream;
     $("capture").disabled = false;
     $("audio").disabled = false;
@@ -84,10 +94,18 @@ $("capture").addEventListener("click", async () => {
   try {
     const img = await hw.captureImage($("preview")); // reusa el stream del preview
     const loc = await hw.getLocation();
-    const doc = await captureImage({ sessionId: session.id, assetId: "asset-001", href: img.href, geometry: loc || assetLocation }, hw);
+    const geom = (loc && loc.lon != null) ? { type: "Point", coordinates: [loc.lon, loc.lat] } : (assetLocation || null);
+    const doc = await captureImage({ sessionId: session.id, assetId: "asset-001", href: img.href, geometry: geom }, hw);
     queue.push({ kind: "media", doc, blob: img.blob });
     $("sync").textContent = `Sincronizar (${queue.length})`;
-    log("foto capturada: " + doc.id + (loc ? " (GPS)" : assetLocation ? " (ubicación del activo)" : " (sin ubicación)"));
+    if (loc) {
+      const acc = loc.accuracy != null ? Math.round(loc.accuracy) : null;
+      log("foto capturada: " + doc.id + " (GPS" + (acc ? " ±" + acc + " m" : "") + ")");
+      if (acc && acc > 100) $("status").textContent = "⚠️ Ubicación aproximada; activa 'Ubicación precisa' en Ajustes de iOS";
+    } else {
+      $("status").textContent = "⚠️ Sin GPS: usando ubicación del activo. Permite ubicación (precisa) en Ajustes de iOS";
+      log("foto capturada: " + doc.id + " (ubicación del activo)");
+    }
   } catch (e) { log("error al capturar: " + e.message); }
 });
 
