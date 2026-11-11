@@ -10,6 +10,7 @@ from .config import MEDIA_DIR
 from .db import init_db
 from .export import router as export_router
 from .ingest import router as ingest_router
+from .media import router as media_router
 from .query import router as query_router
 
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
@@ -32,6 +33,7 @@ def health():
 app.include_router(ingest_router)
 app.include_router(query_router)
 app.include_router(export_router)
+app.include_router(media_router)
 
 _STATIC = Path(__file__).parent / "static"
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
