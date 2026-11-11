@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/observation.schema.json",
+  "title": "Observation",
+  "description": "Observación estructurada sobre un activo. Compatible con OGC SensorThings (Datastream/Observation).",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "asset_id", "type", "value", "observed_at"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "asset_id": { "type": "string", "minLength": 1, "description": "Activo observado (ADR-0017)." },
+    "session_id": { "type": ["string", "null"] },
+    "media_item_id": { "type": ["string", "null"], "description": "Medio que evidencia la observación." },
+    "type": { "type": "string", "description": "Tipo de observación (p. ej. visual, thermal, measurement, note)." },
+    "value": { "description": "Resultado (equivale a SensorThings result)." },
+    "unit": { "type": ["string", "null"], "description": "Unidad de medida." },
+    "observed_at": { "type": "string", "format": "date-time", "description": "Equivale a SensorThings phenomenonTime." },
+    "form_response_id": { "type": ["string", "null"], "description": "Respuesta de formulario de la que proviene." },
+    "metadata": { "type": "object" },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

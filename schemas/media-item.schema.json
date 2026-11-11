@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/media-item.schema.json",
+  "title": "MediaItem",
+  "description": "Medio capturado (imagen, video, audio, térmica, documento). Compatible con STAC Item (id, geometry, datetime, assets).",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "session_id", "asset_id", "type", "captured_at", "assets"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1, "description": "UUID. Equivale al id de STAC Item." },
+    "session_id": { "type": "string", "minLength": 1 },
+    "asset_id": { "type": "string", "minLength": 1, "description": "Activo al que pertenece (ADR-0017)." },
+    "type": { "type": "string", "enum": ["image", "video", "audio", "thermal", "document"] },
+    "captured_at": { "type": "string", "format": "date-time", "description": "Equivale a STAC properties.datetime." },
+    "geometry": {
+      "type": ["object", "null"],
+      "description": "Geometría GeoJSON WGS84; null si no hay coordenada (interior). Equivale a STAC geometry.",
+      "properties": {
+        "type": { "type": "string", "enum": ["Point", "Polygon", "LineString"] },
+        "coordinates": { "type": "array" }
+      },
+      "required": ["type", "coordinates"]
+    },
+    "assets": {
+      "type": "object",
+      "description": "Mapa de assets estilo STAC: clave -> {href, media_type, roles}.",
+      "required": ["primary"],
+      "properties": {
+        "primary": {
+          "type": "object",
+          "required": ["href"],
+          "properties": {
+            "href": { "type": "string" },
+            "media_type": { "type": "string" },
+            "roles": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "original": {
+          "type": "object",
+          "required": ["href"],
+          "properties": {
+            "href": { "type": "string" },
+            "media_type": { "type": "string" },
+            "roles": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "thermal_capture_id": { "type": ["string", "null"], "description": "Vínculo al ThermalCapture si type=thermal." },
+    "transcript_id": { "type": ["string", "null"], "description": "Vínculo al Transcript si type=audio." },
+    "metadata": { "type": "object", "description": "Metadatos libres (fabricante, cámara, etc.)." },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

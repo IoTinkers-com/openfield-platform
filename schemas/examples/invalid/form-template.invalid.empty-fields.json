@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "tpl-001",
+  "name": "Plantilla vacía",
+  "fields": []
+}

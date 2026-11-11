@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/asset-identifier.schema.json",
+  "title": "AssetIdentifier",
+  "description": "Identificador externo equivalente de un activo (QR propio, TAG/placa o OCR).",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "asset_id", "type", "value"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "asset_id": { "type": "string", "minLength": 1, "description": "Activo canónico al que refiere este identificador." },
+    "type": { "type": "string", "enum": ["qr", "tag", "ocr"], "description": "Mecanismo de identificación (D3)." },
+    "value": { "type": "string", "minLength": 1, "description": "Valor leído (código QR, texto de placa, resultado OCR)." },
+    "source": { "type": "string", "description": "Origen (p. ej. 'platform-qr', 'client-plate')." },
+    "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "Confianza, relevante para OCR." },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

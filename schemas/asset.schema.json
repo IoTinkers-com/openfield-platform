@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/asset.schema.json",
+  "title": "Asset",
+  "description": "Activo (equipo) inventariado o inspeccionado. Identidad canónica + N identificadores (AssetIdentifier).",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "name"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1, "description": "Identidad canónica del activo." },
+    "name": { "type": "string", "description": "Nombre o etiqueta del activo." },
+    "category": { "type": "string", "description": "Categoría (p. ej. 'electrical', 'motor', 'panel')." },
+    "location": {
+      "type": ["object", "null"],
+      "description": "Ubicación del activo en WGS84 (exterior) o null (interior, se ubica por QR/TAG).",
+      "properties": {
+        "type": { "type": "string", "enum": ["Point", "Polygon", "LineString"] },
+        "coordinates": { "type": "array" }
+      },
+      "required": ["type", "coordinates"]
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

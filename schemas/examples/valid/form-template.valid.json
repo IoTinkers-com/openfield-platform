@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "tpl-001",
+  "name": "Inventario de tableros",
+  "version": "1",
+  "asset_category": "electrical",
+  "fields": [
+    { "key": "estado", "label": "Estado", "type": "select", "required": true, "options": ["ok", "revisar", "critico"], "unit": null },
+    { "key": "temp_max", "label": "Temperatura máxima", "type": "number", "required": false, "options": null, "unit": "degC" }
+  ],
+  "created_at": "2026-11-11T10:00:00Z"
+}

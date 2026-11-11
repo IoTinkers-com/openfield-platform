@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: openfield
+      POSTGRES_PASSWORD: openfield
+      POSTGRES_DB: openfield
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openfield -d openfield"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://openfield:openfield@db:5432/openfield
+      MEDIA_DIR: /data/media
+    ports:
+      - "8000:8000"
+    volumes:
+      - media:/data/media
+
+volumes:
+  dbdata:
+  media:

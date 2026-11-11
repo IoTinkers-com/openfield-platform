@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "sync-001",
+  "device_id": "dev-001",
+  "type": "upload",
+  "entity_type": "media-item",
+  "entity_id": "media-001",
+  "status": "paused",
+  "device_time": "2026-11-11T10:10:00Z"
+}

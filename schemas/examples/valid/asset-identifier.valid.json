@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "id-001",
+  "asset_id": "asset-001",
+  "type": "qr",
+  "value": "https://iotinkers.com/a/asset-001",
+  "source": "platform-qr",
+  "confidence": null,
+  "created_at": "2026-11-11T10:00:00Z"
+}

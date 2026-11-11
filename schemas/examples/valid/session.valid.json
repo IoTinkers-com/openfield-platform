@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "11111111-1111-1111-1111-111111111111",
+  "device_id": "dev-001",
+  "operator": "Ana",
+  "asset_id": "asset-001",
+  "started_at": "2026-11-11T10:00:00Z",
+  "ended_at": null,
+  "location": { "type": "Point", "coordinates": [-70.65, -33.45] },
+  "device_capabilities": { "thermal_level": "T2", "gps": true, "audio": true },
+  "consent": { "recorded": true, "method": "checkbox" },
+  "created_at": "2026-11-11T10:00:00Z"
+}

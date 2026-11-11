@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "obs-001",
+  "asset_id": "asset-001",
+  "type": "thermal",
+  "observed_at": "2026-11-11T10:06:00Z"
+}

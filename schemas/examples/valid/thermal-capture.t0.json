@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "thermal-t0-001",
+  "media_item_id": "media-003",
+  "level": "T0",
+  "sensor_model": null,
+  "resolution": null,
+  "emissivity": null,
+  "reflected_temperature_c": null,
+  "distance_m": null,
+  "temperature_matrix_c": null,
+  "rendered_image": { "href": "s3://bucket/thermal-t0.png", "media_type": "image/png" },
+  "original_asset": { "href": "s3://bucket/thermal-t0.jpg", "media_type": "image/jpeg", "format": "jpeg" },
+  "captured_at": "2026-11-11T10:07:00Z"
+}

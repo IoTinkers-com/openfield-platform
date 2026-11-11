@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/sync-event.schema.json",
+  "title": "SyncEvent",
+  "description": "Evento de sincronización/transporte (offline-first, D4): cola local, subida reanudable, reloj.",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "device_id", "type", "entity_type", "entity_id", "status", "device_time"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "device_id": { "type": "string", "minLength": 1 },
+    "type": { "type": "string", "enum": ["upload", "clock_sync", "retry"], "description": "Tipo de evento de sincronización." },
+    "entity_type": { "type": "string", "description": "p. ej. media-item, session, observation." },
+    "entity_id": { "type": "string", "minLength": 1 },
+    "tus_upload_id": { "type": ["string", "null"], "description": "ID de subida reanudable tus." },
+    "status": { "type": "string", "enum": ["queued", "uploading", "completed", "failed"] },
+    "attempt": { "type": ["integer", "null"], "minimum": 0, "description": "Número de reintento." },
+    "device_time": { "type": "string", "format": "date-time", "description": "Reloj del dispositivo." },
+    "server_time": { "type": ["string", "null"], "format": "date-time", "description": "Reloj del servidor (tras sincronizar)." },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

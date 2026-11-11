@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/thermal-capture.schema.json",
+  "title": "ThermalCapture",
+  "description": "Contrato canónico térmico T0–T3 (D1): matriz °C + imagen renderizada + JSON con parámetros.",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "media_item_id", "level"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "media_item_id": { "type": "string", "minLength": 1, "description": "MediaItem térmico asociado." },
+    "level": { "type": "string", "enum": ["T0", "T1", "T2", "T3"], "description": "Nivel de capacidad térmica." },
+    "sensor_model": { "type": ["string", "null"], "description": "p. ej. MLX90640, Lepton 3.5." },
+    "resolution": {
+      "type": ["object", "null"],
+      "properties": { "width": { "type": "integer" }, "height": { "type": "integer" } },
+      "required": ["width", "height"]
+    },
+    "emissivity": { "type": ["number", "null"], "description": "Emisividad usada." },
+    "reflected_temperature_c": { "type": ["number", "null"], "description": "Temperatura reflejada (°C)." },
+    "distance_m": { "type": ["number", "null"], "description": "Distancia al objetivo (m)." },
+    "temperature_matrix_c": {
+      "type": ["array", "null"],
+      "description": "Matriz de temperaturas en °C. Null en T0 (solo imagen con paleta).",
+      "items": { "type": "array", "items": { "type": "number" } }
+    },
+    "rendered_image": {
+      "type": "object",
+      "description": "Imagen renderizada (paleta).",
+      "required": ["href"],
+      "properties": { "href": { "type": "string" }, "media_type": { "type": "string" } }
+    },
+    "original_asset": {
+      "type": "object",
+      "description": "Original propietario conservado como evidencia.",
+      "required": ["href"],
+      "properties": { "href": { "type": "string" }, "media_type": { "type": "string" }, "format": { "type": "string" } }
+    },
+    "captured_at": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "level": { "enum": ["T1", "T2", "T3"] } } },
+      "then": { "required": ["temperature_matrix_c", "resolution"] }
+    }
+  ]
+}

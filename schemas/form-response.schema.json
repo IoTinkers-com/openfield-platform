@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/form-response.schema.json",
+  "title": "FormResponse",
+  "description": "Respuesta a una plantilla de formulario, vinculada a un activo (ADR-0017).",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "template_id", "asset_id", "values"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "template_id": { "type": "string", "minLength": 1, "description": "Plantilla respondida (FormTemplate.id)." },
+    "asset_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": ["string", "null"] },
+    "values": { "type": "object", "description": "Mapa key -> valor según la plantilla." },
+    "completed_by": { "type": ["string", "null"], "description": "Quién completó el formulario." },
+    "submitted_at": { "type": "string", "format": "date-time" },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

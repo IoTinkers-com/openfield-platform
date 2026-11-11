@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "thermal-002",
+  "media_item_id": "media-004",
+  "level": "T1",
+  "sensor_model": "MLX90640",
+  "resolution": { "width": 32, "height": 24 },
+  "rendered_image": { "href": "s3://bucket/x.png", "media_type": "image/png" }
+}

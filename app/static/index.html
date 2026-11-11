@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenField</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  body { font-family: sans-serif; margin: 1rem; }
+  #map { height: 50vh; }
+  #gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1rem; }
+  .card { border: 1px solid #ddd; padding: 6px; width: 160px; }
+  .card img { width: 100%; height: 100px; object-fit: cover; background: #eee; }
+  .card .id { font-size: 0.75rem; color: #555; word-break: break-all; }
+</style>
+</head>
+<body>
+<h1>OpenField</h1>
+<div id="map"></div>
+<h2>Medios</h2>
+<div id="gallery"></div>
+<script>
+const map = L.map('map').setView([-33.45, -70.65], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+async function load() {
+  const res = await fetch('/documents?entity_type=media-item');
+  const docs = await res.json();
+  for (const d of docs) {
+    if (d.geometry && d.geometry.type === 'Point') {
+      const [lon, lat] = d.geometry.coordinates;
+      L.marker([lat, lon]).addTo(map).bindPopup(d.id);
+    }
+    const card = document.createElement('div');
+    card.className = 'card';
+    const href = d.assets && d.assets.primary && d.assets.primary.href;
+    if (href) {
+      const img = document.createElement('img');
+      img.src = href;
+      img.alt = d.id;
+      card.appendChild(img);
+    }
+    const label = document.createElement('div');
+    label.className = 'id';
+    label.textContent = d.id;
+    card.appendChild(label);
+    document.getElementById('gallery').appendChild(card);
+  }
+}
+load();
+</script>
+</body>
+</html>

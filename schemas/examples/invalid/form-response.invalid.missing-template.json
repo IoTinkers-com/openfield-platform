@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "resp-001",
+  "asset_id": "asset-001",
+  "values": { "estado": "ok" }
+}

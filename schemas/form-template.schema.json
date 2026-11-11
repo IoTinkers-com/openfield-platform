@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/form-template.schema.json",
+  "title": "FormTemplate",
+  "description": "Plantilla de formulario/checklist configurable (D6).",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "name", "fields"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string" },
+    "version": { "type": "string", "description": "Versión de la plantilla." },
+    "asset_category": { "type": ["string", "null"], "description": "Categoría de activo a la que aplica." },
+    "fields": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "type"],
+        "properties": {
+          "key": { "type": "string" },
+          "label": { "type": "string" },
+          "type": { "type": "string", "enum": ["text", "number", "boolean", "select", "photo", "thermal", "checklist"] },
+          "required": { "type": "boolean" },
+          "options": { "type": ["array", "null"], "items": { "type": "string" } },
+          "unit": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

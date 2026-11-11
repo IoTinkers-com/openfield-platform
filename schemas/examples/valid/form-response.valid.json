@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "resp-001",
+  "template_id": "tpl-001",
+  "asset_id": "asset-001",
+  "session_id": "sess-001",
+  "values": { "estado": "revisar", "temp_max": 46.5 },
+  "completed_by": "Ana",
+  "submitted_at": "2026-11-11T10:09:00Z",
+  "created_at": "2026-11-11T10:09:00Z"
+}

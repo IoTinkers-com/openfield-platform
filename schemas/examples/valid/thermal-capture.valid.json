@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "thermal-001",
+  "media_item_id": "media-002",
+  "level": "T2",
+  "sensor_model": "Lepton 3.5",
+  "resolution": { "width": 160, "height": 120 },
+  "emissivity": 0.95,
+  "reflected_temperature_c": 22.0,
+  "distance_m": 1.5,
+  "temperature_matrix_c": [[22.0, 23.0], [45.0, 46.0]],
+  "rendered_image": { "href": "s3://bucket/thermal-001.png", "media_type": "image/png" },
+  "original_asset": { "href": "s3://bucket/thermal-001.raw", "media_type": "application/octet-stream", "format": "radiometric-jpg" },
+  "captured_at": "2026-11-11T10:06:00Z"
+}

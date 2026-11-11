@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "asset-001",
+  "name": "Tablero eléctrico TB-01",
+  "category": "electrical",
+  "location": null,
+  "created_at": "2026-11-11T10:00:00Z",
+  "updated_at": null
+}

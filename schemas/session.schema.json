@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/session.schema.json",
+  "title": "Session",
+  "description": "Sesión de captura en terreno: un período continuo de trabajo de un dispositivo/operador.",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "device_id", "started_at"],
+  "properties": {
+    "schema_version": { "type": "string", "description": "Versión del esquema. Solo se agregan campos; nunca se rompen (D9)." },
+    "tenant_id": { "type": "string", "minLength": 1, "description": "Tenant (multiempresa, D13)." },
+    "id": { "type": "string", "minLength": 1, "description": "UUID generado en el dispositivo (offline-first, D4)." },
+    "device_id": { "type": "string", "minLength": 1, "description": "Dispositivo que realizó la captura." },
+    "operator": { "type": "string", "description": "Operador (nombre o ID)." },
+    "asset_id": { "type": ["string", "null"], "description": "Activo al que se delimita la sesión (ADR-0017). Null si abarca varios activos." },
+    "started_at": { "type": "string", "format": "date-time", "description": "Inicio (reloj del dispositivo)." },
+    "ended_at": { "type": ["string", "null"], "format": "date-time", "description": "Fin de la sesión." },
+    "location": {
+      "type": ["object", "null"],
+      "description": "Geometría GeoJSON en WGS84 (EPSG:4326); típicamente Point para exterior.",
+      "properties": {
+        "type": { "type": "string", "enum": ["Point", "Polygon", "LineString"] },
+        "coordinates": { "type": "array" }
+      },
+      "required": ["type", "coordinates"]
+    },
+    "device_capabilities": {
+      "type": "object",
+      "description": "Instantánea de capacidades del dispositivo al momento de capturar.",
+      "properties": {
+        "thermal_level": { "type": ["string", "null"], "enum": ["T0", "T1", "T2", "T3", null] },
+        "gps": { "type": "boolean" },
+        "audio": { "type": "boolean" }
+      }
+    },
+    "consent": {
+      "type": "object",
+      "description": "Registro de consentimiento de captura (D15).",
+      "properties": {
+        "recorded": { "type": "boolean" },
+        "method": { "type": "string", "description": "Cómo se obtuvo (p. ej. 'checkbox', 'verbal')." }
+      },
+      "required": ["recorded"]
+    },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}
