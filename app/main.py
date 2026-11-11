@@ -14,6 +14,7 @@ from .ingest import router as ingest_router
 from .media import router as media_router
 from .query import router as query_router
 from .resolve import router as resolve_router
+from .transcribe import router as transcribe_router
 
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -45,6 +46,7 @@ app.include_router(query_router)
 app.include_router(export_router)
 app.include_router(media_router)
 app.include_router(resolve_router)
+app.include_router(transcribe_router)
 
 _STATIC = Path(__file__).parent / "static"
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")
