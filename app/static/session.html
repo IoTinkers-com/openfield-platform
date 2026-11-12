@@ -97,7 +97,7 @@ function renderTranscripts(transcripts) {
 
 async function load() {
   try {
-    const res = await fetch(location.pathname);
+    const res = await fetch(location.pathname, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!res.ok) throw new Error(res.status === 404 ? 'Sesión no encontrada' : `Error ${res.status}`);
     const dossier = await res.json();
     renderSummary(dossier.session, dossier.asset);

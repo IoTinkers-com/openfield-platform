@@ -138,7 +138,7 @@ function renderForms(formResponses) {
 
 async function load() {
   try {
-    const res = await fetch(location.pathname);
+    const res = await fetch(location.pathname, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!res.ok) throw new Error(res.status === 404 ? 'Activo no encontrado' : `Error ${res.status}`);
     const dossier = await res.json();
     renderAssetSummary(dossier.asset, dossier.identifiers);
