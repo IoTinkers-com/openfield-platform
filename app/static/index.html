@@ -156,6 +156,7 @@ function renderMap(mediaDocs) {
   for (const d of mediaDocs) {
     if (d.geometry && d.geometry.type === 'Point') {
       const [lon, lat] = d.geometry.coordinates;
+      if (lon == null || lat == null) continue; // salta medios sin coordenadas válidas
       L.marker([lat, lon]).addTo(markerGroup).bindPopup(popupHtml(d));
     }
   }
