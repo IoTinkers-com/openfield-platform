@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenField · Expediente de activo</title>
+<link rel="stylesheet" href="/static/css/openfield.css">
+</head>
+<body>
+<header class="of-topbar">
+  <a class="of-brand" href="/"><span class="of-logo"></span> OpenField</a>
+  <a class="of-nav-link" href="/capture/">+ Ir a captura</a>
+</header>
+
+<main class="of-shell">
+  <nav class="of-breadcrumb"><a href="/">Dashboard</a> › <span id="crumb-asset">Activo</span></nav>
+
+  <section id="asset-summary" class="of-card">
+    <div class="of-empty"><div class="of-empty-icon">⏳</div><p>Cargando expediente…</p></div>
+  </section>
+
+  <section id="identifiers-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Identificadores</h2>
+    <div id="identifiers" class="of-chips"></div>
+  </section>
+
+  <section id="sessions-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Sesiones</h2>
+    <div id="sessions" class="of-list"></div>
+  </section>
+
+  <section id="media-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Medios</h2>
+    <div id="media" class="of-gallery"></div>
+  </section>
+
+  <section id="observations-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Observaciones</h2>
+    <div style="overflow-x:auto">
+      <table class="of-table">
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Valor</th><th>Unidad</th></tr></thead>
+        <tbody id="observations"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="transcripts-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Transcripciones</h2>
+    <div id="transcripts" class="of-list"></div>
+  </section>
+
+  <section id="forms-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Respuestas de formulario</h2>
+    <div id="forms" class="of-list"></div>
+  </section>
+</main>
+
+<script type="module">
+import { emptyState, escapeHtml, formatDate, mediaCard } from "/static/js/dossier-common.js";
+
+const $ = (id) => document.getElementById(id);
+const assetId = location.pathname.replace(/\/$/, "").split("/").pop();
+
+function show(id) { $(id).style.display = ''; }
+
+function renderAssetSummary(asset, identifiers) {
+  $('crumb-asset').textContent = asset.name || asset.id;
+  document.title = `OpenField · ${asset.name || asset.id}`;
+  const idSummary = identifiers.length
+    ? identifiers.map((i) => `${i.type.toUpperCase()}: ${escapeHtml(i.value)}`).join(' · ')
+    : 'Sin identificadores registrados';
+  $('asset-summary').innerHTML = `
+    <h1 class="of-section-title" style="font-size:1.4rem">${escapeHtml(asset.name || asset.id)}</h1>
+    <div class="of-badge">${escapeHtml(asset.category || 'sin categoría')}</div>
+    <p style="color:var(--of-text-muted)">${escapeHtml(asset.id)} · ${idSummary}</p>
+  `;
+}
+
+function renderIdentifiers(identifiers) {
+  if (!identifiers.length) return;
+  show('identifiers-section');
+  $('identifiers').innerHTML = identifiers
+    .map((i) => `<span class="of-badge">${i.type.toUpperCase()}: ${escapeHtml(i.value)}</span>`)
+    .join('');
+}
+
+function renderSessions(sessions) {
+  if (!sessions.length) {
+    show('sessions-section');
+    emptyState($('sessions'), { icon: '🚶', title: 'Sin sesiones registradas para este activo.' });
+    return;
+  }
+  show('sessions-section');
+  $('sessions').innerHTML = sessions
+    .map((s) => `
+      <a class="of-card" style="display:block; margin-bottom:0.5rem" href="/sessions/${encodeURIComponent(s.id)}">
+        <strong>${formatDate(s.started_at)}</strong> — operador: ${escapeHtml(s.operator || 'n/d')}
+        <div class="of-popup-id">${escapeHtml(s.id)}</div>
+      </a>`)
+    .join('');
+}
+
+function renderMedia(mediaItems) {
+  if (!mediaItems.length) {
+    show('media-section');
+    emptyState($('media'), { icon: '📷', title: 'Sin medios capturados para este activo.' });
+    return;
+  }
+  show('media-section');
+  const container = $('media');
+  container.innerHTML = '';
+  for (const m of mediaItems) container.appendChild(mediaCard(m));
+}
+
+function renderObservations(observations) {
+  if (!observations.length) return;
+  show('observations-section');
+  $('observations').innerHTML = observations
+    .map((o) => `<tr><td>${formatDate(o.observed_at)}</td><td>${escapeHtml(o.type)}</td><td>${escapeHtml(String(o.value))}</td><td>${escapeHtml(o.unit || '—')}</td></tr>`)
+    .join('');
+}
+
+function renderTranscripts(transcripts) {
+  if (!transcripts.length) return;
+  show('transcripts-section');
+  $('transcripts').innerHTML = transcripts
+    .map((t) => `<div class="of-card" style="margin-bottom:0.5rem"><div class="of-badge">motor: ${escapeHtml(t.engine)}</div><p>${escapeHtml(t.text)}</p></div>`)
+    .join('');
+}
+
+function renderForms(formResponses) {
+  if (!formResponses.length) return;
+  show('forms-section');
+  $('forms').innerHTML = formResponses
+    .map((f) => `<div class="of-card" style="margin-bottom:0.5rem"><div class="of-popup-id">${escapeHtml(f.id)} · plantilla ${escapeHtml(f.template_id)}</div><pre class="of-log" style="margin:0.4rem 0 0">${escapeHtml(JSON.stringify(f.values, null, 2))}</pre></div>`)
+    .join('');
+}
+
+async function load() {
+  try {
+    const res = await fetch(location.pathname);
+    if (!res.ok) throw new Error(res.status === 404 ? 'Activo no encontrado' : `Error ${res.status}`);
+    const dossier = await res.json();
+    renderAssetSummary(dossier.asset, dossier.identifiers);
+    renderIdentifiers(dossier.identifiers);
+    renderSessions(dossier.sessions);
+    renderMedia(dossier.media_items);
+    renderObservations(dossier.observations);
+    renderTranscripts(dossier.transcripts);
+    renderForms(dossier.form_responses);
+  } catch (e) {
+    emptyState($('asset-summary'), { icon: '⚠️', title: 'No se pudo cargar el expediente.', hint: e.message, cta: { href: '/', label: 'Volver al dashboard' } });
+  }
+}
+
+load();
+</script>
+</body>
+</html>

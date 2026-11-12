@@ -211,7 +211,7 @@ a { color: var(--of-primary); }
 
 /* Galería de medios */
 .of-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--of-space-3); }
-.of-media-card { border: 1px solid var(--of-border); border-radius: var(--of-radius-sm); overflow: hidden; background: var(--of-surface); }
+.of-media-card { display: block; border: 1px solid var(--of-border); border-radius: var(--of-radius-sm); overflow: hidden; background: var(--of-surface); text-decoration: none; color: inherit; }
 .of-media-card img { width: 100%; height: 110px; object-fit: cover; display: block; background: var(--of-bg); }
 .of-media-card .of-media-placeholder { height: 110px; background: var(--of-bg); display: flex; align-items: center; justify-content: center; color: var(--of-text-muted); font-size: 0.75rem; }
 .of-media-card .of-media-meta { padding: var(--of-space-2); font-size: 0.72rem; color: var(--of-text-muted); }
@@ -232,6 +232,14 @@ a { color: var(--of-primary); }
 .of-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 .of-table th, .of-table td { border: 1px solid var(--of-border); padding: 0.4rem 0.6rem; text-align: left; }
 .of-table th { background: var(--of-bg); }
+
+/* Expedientes de activo/sesión (ADR-0019) */
+.of-breadcrumb { font-size: 0.85rem; color: var(--of-text-muted); margin: 0 0 var(--of-space-3); }
+.of-breadcrumb a { color: var(--of-text-muted); text-decoration: underline; }
+.of-chips { display: flex; flex-wrap: wrap; gap: var(--of-space-2); }
+.of-list { display: flex; flex-direction: column; gap: var(--of-space-2); }
+.of-list a.of-card { text-decoration: none; color: inherit; }
+.of-list a.of-card:hover { border-color: var(--of-primary); }
 
 /* Popup del mapa */
 .of-popup { display: flex; gap: var(--of-space-2); align-items: center; max-width: 220px; }

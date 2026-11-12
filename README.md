@@ -37,6 +37,11 @@ python scripts/validate_schemas.py
 - `POST /ingest/{entity_type}` — valida contra el esquema y dedupe por `id`.
 - `GET /documents?tenant_id=&entity_type=` — lista documentos.
 - `GET /documents/{id}` — documento.
+- `GET /assets/{id}` — expediente del activo (identificadores, sesiones, medios,
+  observaciones, transcripciones, respuestas de formulario); HTML para navegadores, JSON para
+  el resto (content negotiation por `Accept`, ADR-0019).
+- `GET /sessions/{id}` — vista de sesión (medios, observaciones, transcripciones + resumen del
+  activo); misma negociación de contenido que `/assets/{id}`.
 - `GET /health` — salud.
 
 ## Contrato

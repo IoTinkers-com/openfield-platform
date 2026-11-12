@@ -65,15 +65,15 @@
     <div id="by-asset"></div>
   </section>
 
-  <section class="of-card">
-    <h2 class="of-section-title">Registro</h2>
-    <div id="table-wrap" style="overflow-x:auto">
+  <details class="of-card">
+    <summary class="of-section-title" style="display:inline-block; margin:0">Registro (avanzado)</summary>
+    <div id="table-wrap" style="overflow-x:auto; margin-top:var(--of-space-3)">
       <table class="of-table">
         <thead><tr><th>ID</th><th>Tipo</th><th>Activo</th><th>Fecha</th><th>Tenant</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
-  </section>
+  </details>
 
 </main>
 
@@ -116,10 +116,16 @@ function emptyState(container, { icon = '🗂️', title, hint, cta } = {}) {
 }
 
 function mediaCard(d) {
-  const card = document.createElement('div');
+  const href = d.assets && d.assets.primary && d.assets.primary.href;
+  const card = document.createElement(href ? 'a' : 'div');
   card.className = 'of-media-card';
   card.id = `media-${d.id}`;
-  const href = d.assets && d.assets.primary && d.assets.primary.href;
+  if (href) {
+    card.href = href;
+    card.target = '_blank';
+    card.rel = 'noopener';
+    card.title = 'Ver medio original';
+  }
   if (href) {
     const img = document.createElement('img');
     img.src = href;
@@ -190,7 +196,13 @@ function renderByAsset(mediaDocs, assetsById) {
     details.open = groups.size <= 3;
     const summary = document.createElement('summary');
     const label = asset ? asset.name : (assetId === 'sin-activo' ? 'Sin activo asignado' : assetId);
-    summary.innerHTML = `${label} <span class="of-badge">${items.length} medio${items.length === 1 ? '' : 's'}</span>`;
+    const countBadge = `<span class="of-badge">${items.length} medio${items.length === 1 ? '' : 's'}</span>`;
+    if (assetId !== 'sin-activo') {
+      summary.innerHTML = `<a href="/assets/${encodeURIComponent(assetId)}">${label}</a> ${countBadge}`;
+      summary.querySelector('a').addEventListener('click', (e) => e.stopPropagation());
+    } else {
+      summary.innerHTML = `${label} ${countBadge}`;
+    }
     details.appendChild(summary);
     const gallery = document.createElement('div');
     gallery.className = 'of-gallery';
@@ -217,7 +229,16 @@ function renderTable(docs) {
     const tr = document.createElement('tr');
     tr.appendChild(cell(d.id));
     tr.appendChild(cell(d.type || d.entity_type || '—'));
-    tr.appendChild(cell(d.asset_id));
+    if (d.asset_id) {
+      const td = document.createElement('td');
+      const a = document.createElement('a');
+      a.href = `/assets/${encodeURIComponent(d.asset_id)}`;
+      a.textContent = d.asset_id;
+      td.appendChild(a);
+      tr.appendChild(td);
+    } else {
+      tr.appendChild(cell(null));
+    }
     tr.appendChild(cell((dateField(d) || '').slice(0, 19).replace('T', ' ')));
     tr.appendChild(cell(d.tenant_id));
     rows.appendChild(tr);

@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import MEDIA_DIR
 from .db import init_db
+from .dossier import router as dossier_router
 from .export import router as export_router
 from .ingest import router as ingest_router
 from .media import router as media_router
@@ -47,6 +48,7 @@ app.include_router(export_router)
 app.include_router(media_router)
 app.include_router(resolve_router)
 app.include_router(transcribe_router)
+app.include_router(dossier_router)
 
 _STATIC = Path(__file__).parent / "static"
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")

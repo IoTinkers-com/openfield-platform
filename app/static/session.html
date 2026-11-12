@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenField · Sesión</title>
+<link rel="stylesheet" href="/static/css/openfield.css">
+</head>
+<body>
+<header class="of-topbar">
+  <a class="of-brand" href="/"><span class="of-logo"></span> OpenField</a>
+  <a class="of-nav-link" href="/capture/">+ Ir a captura</a>
+</header>
+
+<main class="of-shell">
+  <nav class="of-breadcrumb">
+    <a href="/">Dashboard</a> › <a id="crumb-asset" href="#">Activo</a> › <span>Sesión</span>
+  </nav>
+
+  <section id="session-summary" class="of-card">
+    <div class="of-empty"><div class="of-empty-icon">⏳</div><p>Cargando sesión…</p></div>
+  </section>
+
+  <section id="media-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Medios de la sesión</h2>
+    <div id="media" class="of-gallery"></div>
+  </section>
+
+  <section id="observations-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Observaciones</h2>
+    <div style="overflow-x:auto">
+      <table class="of-table">
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Valor</th><th>Unidad</th></tr></thead>
+        <tbody id="observations"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="transcripts-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Transcripciones</h2>
+    <div id="transcripts" class="of-list"></div>
+  </section>
+</main>
+
+<script type="module">
+import { emptyState, escapeHtml, formatDate, mediaCard } from "/static/js/dossier-common.js";
+
+const $ = (id) => document.getElementById(id);
+
+function show(id) { $(id).style.display = ''; }
+
+function renderSummary(session, asset) {
+  document.title = `OpenField · Sesión ${session.id}`;
+  if (asset) {
+    $('crumb-asset').textContent = asset.name || asset.id;
+    $('crumb-asset').href = `/assets/${encodeURIComponent(asset.id)}`;
+  } else {
+    $('crumb-asset').textContent = 'Sin activo';
+    $('crumb-asset').removeAttribute('href');
+  }
+  $('session-summary').innerHTML = `
+    <h1 class="of-section-title" style="font-size:1.4rem">Sesión ${formatDate(session.started_at)}</h1>
+    <p style="color:var(--of-text-muted)">
+      ${escapeHtml(session.id)} · operador: ${escapeHtml(session.operator || 'n/d')} ·
+      dispositivo: ${escapeHtml(session.device_id)}
+    </p>
+    ${asset ? `<a class="of-nav-link secondary" href="/assets/${encodeURIComponent(asset.id)}">Ver expediente de ${escapeHtml(asset.name || asset.id)}</a>` : ''}
+  `;
+}
+
+function renderMedia(mediaItems) {
+  show('media-section');
+  if (!mediaItems.length) {
+    emptyState($('media'), { icon: '📷', title: 'Sin medios en esta sesión.' });
+    return;
+  }
+  const container = $('media');
+  container.innerHTML = '';
+  for (const m of mediaItems) container.appendChild(mediaCard(m));
+}
+
+function renderObservations(observations) {
+  if (!observations.length) return;
+  show('observations-section');
+  $('observations').innerHTML = observations
+    .map((o) => `<tr><td>${formatDate(o.observed_at)}</td><td>${escapeHtml(o.type)}</td><td>${escapeHtml(String(o.value))}</td><td>${escapeHtml(o.unit || '—')}</td></tr>`)
+    .join('');
+}
+
+function renderTranscripts(transcripts) {
+  if (!transcripts.length) return;
+  show('transcripts-section');
+  $('transcripts').innerHTML = transcripts
+    .map((t) => `<div class="of-card" style="margin-bottom:0.5rem"><div class="of-badge">motor: ${escapeHtml(t.engine)}</div><p>${escapeHtml(t.text)}</p></div>`)
+    .join('');
+}
+
+async function load() {
+  try {
+    const res = await fetch(location.pathname);
+    if (!res.ok) throw new Error(res.status === 404 ? 'Sesión no encontrada' : `Error ${res.status}`);
+    const dossier = await res.json();
+    renderSummary(dossier.session, dossier.asset);
+    renderMedia(dossier.media_items);
+    renderObservations(dossier.observations);
+    renderTranscripts(dossier.transcripts);
+  } catch (e) {
+    emptyState($('session-summary'), { icon: '⚠️', title: 'No se pudo cargar la sesión.', hint: e.message, cta: { href: '/', label: 'Volver al dashboard' } });
+  }
+}
+
+load();
+</script>
+</body>
+</html>
