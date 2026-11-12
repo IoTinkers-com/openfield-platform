@@ -1,0 +1,251 @@
+/*
+ * OpenField — estilos compartidos (design tokens) entre el dashboard y la PWA de captura.
+ * Copia idéntica en openfield-wearable/public/style.css (ver AGENTS.md: capa de app
+ * duplicada entre repos hasta que exista un paquete de UI compartido).
+ */
+:root {
+  --of-bg: #f6f7f9;
+  --of-surface: #ffffff;
+  --of-border: #e2e5ea;
+  --of-text: #1a1d23;
+  --of-text-muted: #5b6270;
+  --of-primary: #1f6feb;
+  --of-primary-dark: #15509c;
+  --of-success: #1a8a4a;
+  --of-warning: #b4740e;
+  --of-danger: #c0292d;
+  --of-radius: 10px;
+  --of-radius-sm: 6px;
+  --of-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --of-space-1: 0.25rem;
+  --of-space-2: 0.5rem;
+  --of-space-3: 0.75rem;
+  --of-space-4: 1rem;
+  --of-space-6: 1.5rem;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  margin: 0;
+  background: var(--of-bg);
+  color: var(--of-text);
+}
+
+a { color: var(--of-primary); }
+
+.of-shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 var(--of-space-4) var(--of-space-6);
+}
+
+/* Barra superior: identidad + navegación entre dashboard y captura */
+.of-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--of-space-3);
+  padding: var(--of-space-3) var(--of-space-4);
+  background: var(--of-surface);
+  border-bottom: 1px solid var(--of-border);
+  margin-bottom: var(--of-space-4);
+  flex-wrap: wrap;
+}
+
+.of-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--of-space-2);
+  font-weight: 700;
+  font-size: 1.1rem;
+  text-decoration: none;
+  color: var(--of-text);
+}
+
+.of-brand .of-logo {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--of-primary);
+}
+
+.of-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--of-space-1);
+  padding: var(--of-space-2) var(--of-space-3);
+  border-radius: var(--of-radius-sm);
+  background: var(--of-primary);
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.of-nav-link:hover { background: var(--of-primary-dark); }
+.of-nav-link.secondary { background: transparent; color: var(--of-primary); border: 1px solid var(--of-border); }
+.of-nav-link.secondary:hover { background: var(--of-bg); }
+
+/* Tarjetas, secciones */
+.of-card {
+  background: var(--of-surface);
+  border: 1px solid var(--of-border);
+  border-radius: var(--of-radius);
+  box-shadow: var(--of-shadow);
+  padding: var(--of-space-4);
+  margin-bottom: var(--of-space-4);
+}
+
+.of-section-title {
+  margin: 0 0 var(--of-space-3);
+  font-size: 1.05rem;
+}
+
+/* Botones */
+.of-btn {
+  font: inherit;
+  padding: 0.6rem 1rem;
+  border-radius: var(--of-radius-sm);
+  border: 1px solid var(--of-border);
+  background: var(--of-surface);
+  color: var(--of-text);
+  cursor: pointer;
+}
+.of-btn:hover { border-color: var(--of-primary); }
+.of-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.of-btn.primary { background: var(--of-primary); border-color: var(--of-primary); color: #fff; }
+.of-btn.primary:hover { background: var(--of-primary-dark); }
+.of-btn.block { width: 100%; }
+
+/* Formularios / filtros */
+.of-field { display: flex; flex-direction: column; gap: var(--of-space-1); font-size: 0.85rem; color: var(--of-text-muted); }
+.of-field select, .of-field input {
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--of-radius-sm);
+  border: 1px solid var(--of-border);
+  background: var(--of-surface);
+  color: var(--of-text);
+}
+.of-filters { display: flex; flex-wrap: wrap; gap: var(--of-space-3); align-items: flex-end; }
+
+/* Badges / indicadores de estado */
+.of-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--of-space-1);
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--of-bg);
+  color: var(--of-text-muted);
+  border: 1px solid var(--of-border);
+}
+.of-badge.ok { background: #eafaf1; color: var(--of-success); border-color: #bfe8cf; }
+.of-badge.warn { background: #fdf4e3; color: var(--of-warning); border-color: #f1ddab; }
+.of-badge.danger { background: #fbe9e9; color: var(--of-danger); border-color: #f3c3c4; }
+.of-badge.live { background: #fdeceb; color: var(--of-danger); border-color: #f6c7c6; }
+.of-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+/* Estado vacío */
+.of-empty {
+  text-align: center;
+  padding: var(--of-space-6) var(--of-space-4);
+  color: var(--of-text-muted);
+}
+.of-empty .of-empty-icon { font-size: 2rem; margin-bottom: var(--of-space-2); }
+
+/* Pasos (stepper) de la captura */
+.of-steps { display: flex; gap: var(--of-space-2); margin: 0 0 var(--of-space-4); flex-wrap: wrap; }
+.of-step {
+  flex: 1;
+  min-width: 110px;
+  display: flex;
+  align-items: center;
+  gap: var(--of-space-2);
+  padding: var(--of-space-2) var(--of-space-3);
+  border-radius: var(--of-radius-sm);
+  background: var(--of-bg);
+  border: 1px solid var(--of-border);
+  color: var(--of-text-muted);
+  font-size: 0.82rem;
+}
+.of-step .of-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--of-border);
+  color: var(--of-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.of-step.active { background: #eaf2fe; border-color: var(--of-primary); color: var(--of-primary-dark); }
+.of-step.active .of-step-num { background: var(--of-primary); color: #fff; }
+.of-step.done { color: var(--of-success); }
+.of-step.done .of-step-num { background: var(--of-success); color: #fff; }
+
+/* Mensajes de estado y log */
+.of-status { font-weight: 600; min-height: 1.4rem; margin: var(--of-space-2) 0; }
+.of-status.ok { color: var(--of-success); }
+.of-status.warn { color: var(--of-warning); }
+.of-status.danger { color: var(--of-danger); }
+.of-log {
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  background: var(--of-bg);
+  border: 1px solid var(--of-border);
+  border-radius: var(--of-radius-sm);
+  padding: var(--of-space-2) var(--of-space-3);
+  min-height: 3rem;
+  max-height: 10rem;
+  overflow: auto;
+}
+
+/* Galería de medios */
+.of-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--of-space-3); }
+.of-media-card { border: 1px solid var(--of-border); border-radius: var(--of-radius-sm); overflow: hidden; background: var(--of-surface); }
+.of-media-card img { width: 100%; height: 110px; object-fit: cover; display: block; background: var(--of-bg); }
+.of-media-card .of-media-placeholder { height: 110px; background: var(--of-bg); display: flex; align-items: center; justify-content: center; color: var(--of-text-muted); font-size: 0.75rem; }
+.of-media-card .of-media-meta { padding: var(--of-space-2); font-size: 0.72rem; color: var(--of-text-muted); }
+.of-media-card .of-media-id { word-break: break-all; }
+
+/* Agrupación por activo */
+.of-asset-group { margin-bottom: var(--of-space-4); }
+.of-asset-group summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: var(--of-space-2) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--of-space-2);
+}
+
+/* Tabla */
+.of-table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+.of-table th, .of-table td { border: 1px solid var(--of-border); padding: 0.4rem 0.6rem; text-align: left; }
+.of-table th { background: var(--of-bg); }
+
+/* Popup del mapa */
+.of-popup { display: flex; gap: var(--of-space-2); align-items: center; max-width: 220px; }
+.of-popup img { width: 56px; height: 56px; object-fit: cover; border-radius: var(--of-radius-sm); background: var(--of-bg); }
+.of-popup .of-popup-id { font-size: 0.72rem; color: var(--of-text-muted); word-break: break-all; }
+
+/* Vista de captura (PWA) */
+.of-capture-video { width: 100%; max-width: 480px; border-radius: var(--of-radius); background: #000; display: block; }
+.of-actions { display: flex; flex-wrap: wrap; gap: var(--of-space-2); margin: var(--of-space-3) 0; align-items: center; }
+.of-consent-row { display: flex; align-items: center; gap: var(--of-space-2); flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .of-topbar { padding: var(--of-space-2) var(--of-space-3); }
+  .of-shell { padding: 0 var(--of-space-2) var(--of-space-4); }
+  .of-actions .of-btn { flex: 1 1 45%; }
+  .of-gallery { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}

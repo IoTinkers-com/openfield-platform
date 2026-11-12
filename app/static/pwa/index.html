@@ -4,37 +4,58 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="/static/css/openfield.css">
 <title>OpenField · Captura</title>
-<style>
-  body { font-family: sans-serif; margin: 1rem; max-width: 720px; }
-  video { width: 100%; max-width: 480px; border-radius: 6px; background: #000; }
-  .row { margin: 0.75rem 0; }
-  .indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #ccc; margin-right: 6px; }
-  .indicator.on { background: #e11; }
-  #status { color: #333; font-size: 1rem; font-weight: 600; min-height: 1.4rem; margin: 0.5rem 0; }
-  button { padding: 0.5rem 1rem; margin-right: 0.5rem; }
-  button:disabled { opacity: 0.5; }
-  #log { white-space: pre-wrap; font-family: monospace; font-size: 0.8rem; background: #f5f5f5; padding: 0.5rem; min-height: 3rem; }
-</style>
 </head>
 <body>
-<h1>OpenField · Captura</h1>
-<div class="row">
-  <label><input type="checkbox" id="consent"> Acepto el registro de captura</label>
-  <span class="indicator" id="indicator" title="Indicador de grabación (D15)"></span>
-</div>
-<div class="row"><video id="preview" autoplay playsinline muted></video></div>
-<div class="row">
-  <button id="start" disabled>Iniciar sesión</button>
-  <label>Cámara: <select id="camera"><option value="environment">Trasera</option><option value="user">Frontal</option></select></label>
-  <button id="capture" disabled>Capturar foto</button>
-  <label>Audio (s): <input id="duration" type="number" min="1" max="120" value="3" style="width:3.5rem"></label>
-  <button id="audio" disabled>Nota de audio</button>
-  <button id="sync" disabled>Sincronizar (0)</button>
-</div>
-<div id="status"></div>
-<h2>Log</h2>
-<div id="log"></div>
+<header class="of-topbar">
+  <a class="of-brand" href="/"><span class="of-logo"></span> OpenField · Captura</a>
+  <a class="of-nav-link secondary" href="/">← Dashboard</a>
+</header>
+
+<main class="of-shell">
+  <section class="of-card">
+    <div class="of-actions" style="justify-content: space-between; margin-top:0;">
+      <div id="steps" class="of-steps" style="flex: 1 1 auto; margin: 0;"></div>
+      <span id="conn-badge" class="of-badge"></span>
+    </div>
+
+    <div class="of-consent-row">
+      <label><input type="checkbox" id="consent"> Acepto el registro de captura</label>
+      <span class="of-badge" id="indicator-badge"><span class="of-dot" id="indicator"></span> Grabación: inactiva</span>
+    </div>
+
+    <div class="of-actions">
+      <video id="preview" class="of-capture-video" autoplay playsinline muted></video>
+    </div>
+
+    <div class="of-actions">
+      <button id="start" class="of-btn primary" disabled>Iniciar sesión</button>
+      <div class="of-field" style="flex-direction:row; align-items:center; gap:0.4rem;">
+        <label for="camera">Cámara</label>
+        <select id="camera"><option value="environment">Trasera</option><option value="user">Frontal</option></select>
+      </div>
+      <button id="capture" class="of-btn" disabled>📷 Capturar foto</button>
+      <div class="of-field" style="flex-direction:row; align-items:center; gap:0.4rem;">
+        <label for="duration">Audio (s)</label>
+        <input id="duration" type="number" min="1" max="120" value="3" style="width:3.5rem">
+      </div>
+      <button id="audio" class="of-btn" disabled>🎙️ Nota de audio</button>
+    </div>
+
+    <div class="of-actions" style="justify-content: space-between;">
+      <button id="sync" class="of-btn primary" disabled>⤒ Sincronizar</button>
+      <span id="queue-badge" class="of-badge ok">Sin pendientes</span>
+    </div>
+
+    <div id="status" class="of-status"></div>
+  </section>
+
+  <section class="of-card">
+    <h2 class="of-section-title">Registro</h2>
+    <div id="log" class="of-log"></div>
+  </section>
+</main>
 
 <script type="module">
 // Mismo origen (servida por la plataforma): la API está en el mismo host.
@@ -50,14 +71,77 @@ let session = null;
 let assetLocation = null; // fallback interior (D2: QR/TAG del activo)
 const deviceId = newId("dev");
 let stream = null;
+let syncedOnce = false;
 
 const $ = (id) => document.getElementById(id);
-const log = (msg) => { $("log").textContent += msg + "\n"; };
+const log = (msg) => {
+  const el = $("log");
+  el.textContent += msg + "\n";
+  el.scrollTop = el.scrollHeight;
+};
+
+// Mensajes de error amigables en español; el detalle técnico siempre queda en el registro (log).
+function friendlyError(e) {
+  const name = e && e.name;
+  const msg = (e && e.message) || String(e);
+  if (name === "NotAllowedError") return "Permiso denegado: habilita el acceso a cámara/micrófono en Ajustes del navegador.";
+  if (name === "NotFoundError" || name === "OverconstrainedError") return "No se encontró cámara o micrófono en este dispositivo.";
+  if (/upload failed|ingest failed|transcribe failed/.test(msg)) return "No se pudo conectar con la plataforma; el dato queda en la cola local para reintentar.";
+  if (/Failed to fetch|NetworkError|network/i.test(msg)) return "Sin conexión con la plataforma. Lo capturado se guarda localmente.";
+  return "Ocurrió un problema: " + msg;
+}
+
+function setStatus(message, level = "") {
+  const el = $("status");
+  el.textContent = message;
+  el.className = "of-status" + (level ? " " + level : "");
+}
+
+// Indicador de conexión a internet (no confundir con conexión a la plataforma).
+function updateConnectionBadge() {
+  const online = navigator.onLine;
+  const badge = $("conn-badge");
+  badge.className = "of-badge " + (online ? "ok" : "danger");
+  badge.innerHTML = `<span class="of-dot"></span> ${online ? "En línea" : "Sin conexión: se guarda localmente"}`;
+}
+window.addEventListener("online", updateConnectionBadge);
+window.addEventListener("offline", updateConnectionBadge);
+
+// Estados visuales del flujo de captura (D15: consentimiento antes que nada).
+const STEP_DEFS = [
+  ["consent", "Consentimiento"],
+  ["session", "Sesión"],
+  ["capture", "Captura"],
+  ["sync", "Sincronizar"],
+];
+function renderSteps() {
+  const consentGiven = $("consent").checked;
+  const sessionStarted = Boolean(session);
+  const done = new Set();
+  if (consentGiven) done.add("consent");
+  if (sessionStarted) done.add("session");
+  if (syncedOnce && queue.length === 0) done.add("sync");
+  const active = !consentGiven ? "consent" : !sessionStarted ? "session" : queue.length > 0 ? "sync" : "capture";
+  $("steps").innerHTML = STEP_DEFS.map(([key, label], i) => {
+    const state = done.has(key) ? "done" : key === active ? "active" : "";
+    return `<div class="of-step ${state}"><span class="of-step-num">${i + 1}</span>${label}</div>`;
+  }).join("");
+}
+
+function updateQueueBadge() {
+  const badge = $("queue-badge");
+  $("sync").textContent = queue.length ? `⤒ Sincronizar (${queue.length})` : "⤒ Sincronizar";
+  badge.textContent = queue.length ? `${queue.length} pendiente${queue.length === 1 ? "" : "s"}` : "Sin pendientes";
+  badge.className = "of-badge " + (queue.length ? "warn" : "ok");
+  renderSteps();
+}
 
 $("consent").addEventListener("change", () => {
   const on = $("consent").checked;
-  $("indicator").className = "indicator" + (on ? " on" : "");
+  $("indicator").parentElement.classList.toggle("live", on);
+  $("indicator-badge").lastChild.textContent = on ? " Grabación: consentida" : " Grabación: inactiva";
   $("start").disabled = !on;
+  renderSteps();
 });
 
 $("camera").addEventListener("change", async () => {
@@ -66,7 +150,10 @@ $("camera").addEventListener("change", async () => {
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: $("camera").value } } });
     $("preview").srcObject = stream;
-  } catch (e) { log("cámara no disponible: " + e.message); }
+  } catch (e) {
+    setStatus("❌ " + friendlyError(e), "danger");
+    log("cámara no disponible: " + e.message);
+  }
 });
 
 $("start").addEventListener("click", async () => {
@@ -74,6 +161,7 @@ $("start").addEventListener("click", async () => {
   queue.push({ kind: "doc", entity: "device", doc: createDevice(deviceId, hw) });
   queue.push({ kind: "doc", entity: "session", doc: session });
   log("sesión iniciada: " + session.id);
+  updateQueueBadge();
   try {
     const res = await fetch(`${BASE_URL}/documents/asset-001`);
     if (res.ok) assetLocation = (await res.json()).location || null;
@@ -85,9 +173,12 @@ $("start").addEventListener("click", async () => {
     $("capture").disabled = false;
     $("audio").disabled = false;
     $("sync").disabled = false;
+    setStatus("✅ Sesión lista. Captura una foto o nota de audio.", "ok");
   } catch (e) {
+    setStatus("❌ " + friendlyError(e), "danger");
     log("cámara no disponible: " + e.message + " (permite el acceso a la cámara)");
   }
+  renderSteps();
 });
 
 $("capture").addEventListener("click", async () => {
@@ -97,35 +188,37 @@ $("capture").addEventListener("click", async () => {
     const geom = (loc && loc.lon != null) ? { type: "Point", coordinates: [loc.lon, loc.lat] } : (assetLocation || null);
     const doc = await captureImage({ sessionId: session.id, assetId: "asset-001", href: img.href, geometry: geom }, hw);
     queue.push({ kind: "media", doc, blob: img.blob });
-    $("sync").textContent = `Sincronizar (${queue.length})`;
+    updateQueueBadge();
     if (loc) {
       const acc = loc.accuracy != null ? Math.round(loc.accuracy) : null;
       log("foto capturada: " + doc.id + " (GPS" + (acc ? " ±" + acc + " m" : "") + ")");
-      if (acc && acc > 100) $("status").textContent = "⚠️ Ubicación aproximada; activa 'Ubicación precisa' en Ajustes de iOS";
+      setStatus(acc && acc > 100 ? "⚠️ Ubicación aproximada; activa 'Ubicación precisa' en Ajustes." : "✅ Foto capturada.", acc && acc > 100 ? "warn" : "ok");
     } else {
-      $("status").textContent = "⚠️ Sin GPS: usando ubicación del activo. Permite ubicación (precisa) en Ajustes de iOS";
+      setStatus("⚠️ Sin GPS: se usó la ubicación del activo. Permite ubicación precisa en Ajustes.", "warn");
       log("foto capturada: " + doc.id + " (ubicación del activo)");
     }
-  } catch (e) { log("error al capturar: " + e.message); }
+  } catch (e) {
+    setStatus("❌ " + friendlyError(e), "danger");
+    log("error al capturar: " + e.message);
+  }
 });
 
 $("audio").addEventListener("click", async () => {
-  const status = $("status");
   const btn = $("audio");
   btn.disabled = true;
   try {
     const secs = parseInt($("duration").value, 10) || 3;
-    status.textContent = "🔴 Grabando… (" + secs + " s) — habla";
+    setStatus("🔴 Grabando… (" + secs + " s) — habla", "warn");
     const audio = await hw.recordAudio(secs * 1000); // graba y devuelve { blob }
-    status.textContent = "⏳ Transcribiendo…";
+    setStatus("⏳ Transcribiendo…");
     const result = await transcribeAudio(audio.blob, BASE_URL); // { text, engine }
     const doc = recordAudio({ sessionId: session.id, assetId: "asset-001", engine: result.engine || "stub", text: result.text || "(sin transcripción)" });
     queue.push({ kind: "doc", entity: "transcript", doc });
-    $("sync").textContent = `Sincronizar (${queue.length})`;
-    status.textContent = "✅ Transcrito (motor " + doc.engine + "): " + doc.text;
+    updateQueueBadge();
+    setStatus("✅ Transcrito (motor " + doc.engine + "): " + doc.text, "ok");
     log("transcripción: " + doc.id + " (motor " + doc.engine + ")");
   } catch (e) {
-    status.textContent = "❌ Error: " + e.message;
+    setStatus("❌ " + friendlyError(e), "danger");
     log("error audio: " + e.message);
   } finally {
     btn.disabled = false;
@@ -134,6 +227,7 @@ $("audio").addEventListener("click", async () => {
 
 $("sync").addEventListener("click", async () => {
   const items = queue.splice(0, queue.length);
+  let failed = 0;
   for (const item of items) {
     try {
       if (item.kind === "media") {
@@ -147,10 +241,21 @@ $("sync").addEventListener("click", async () => {
     } catch (e) {
       log("error: " + e.message);
       queue.push(item); // reintentar luego (D4)
+      failed += 1;
     }
   }
-  $("sync").textContent = `Sincronizar (${queue.length})`;
+  syncedOnce = true;
+  updateQueueBadge();
+  if (failed) {
+    setStatus(`⚠️ ${failed} elemento(s) no se pudieron sincronizar; quedan en la cola para reintentar.`, "warn");
+  } else if (items.length) {
+    setStatus("✅ Sincronización completa.", "ok");
+  }
 });
+
+updateConnectionBadge();
+renderSteps();
+updateQueueBadge();
 </script>
 </body>
 </html>

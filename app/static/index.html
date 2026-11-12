@@ -3,93 +3,319 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OpenField</title>
+<title>OpenField · Dashboard</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="/static/css/openfield.css">
 <style>
-  body { font-family: sans-serif; margin: 1rem; }
-  #map { height: 50vh; }
-  #gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1rem; }
-  .card { border: 1px solid #ddd; padding: 6px; width: 160px; }
-  .card img { width: 100%; height: 100px; object-fit: cover; background: #eee; }
-  .card .id { font-size: 0.75rem; color: #555; word-break: break-all; }
-  .card .placeholder { height: 100px; background: #e5e7eb; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 0.75rem; }
-  table { border-collapse: collapse; margin-top: 1rem; width: 100%; }
-  th, td { border: 1px solid #ddd; padding: 4px 8px; font-size: 0.85rem; text-align: left; }
-  th { background: #f5f5f5; }
+  #map { height: 50vh; border-radius: var(--of-radius); overflow: hidden; border: 1px solid var(--of-border); }
+  .of-media-card.highlight { outline: 2px solid var(--of-primary); }
 </style>
 </head>
 <body>
-<h1>OpenField</h1>
-<div id="map"></div>
-<h2>Medios</h2>
-<div id="gallery"></div>
-<h2>Registro</h2>
-<table>
-  <thead><tr><th>ID</th><th>Tipo</th><th>Capturado</th><th>Lon</th><th>Lat</th></tr></thead>
-  <tbody id="rows"></tbody>
-</table>
+<header class="of-topbar">
+  <a class="of-brand" href="/"><span class="of-logo"></span> OpenField</a>
+  <a class="of-nav-link" href="/capture/">+ Ir a captura</a>
+</header>
+
+<main class="of-shell">
+
+  <section class="of-card">
+    <h2 class="of-section-title">Filtros</h2>
+    <form id="filters" class="of-filters">
+      <div class="of-field">
+        <label for="f-tenant">Tenant</label>
+        <input id="f-tenant" type="text" placeholder="Todos los tenants" maxlength="80">
+      </div>
+      <div class="of-field">
+        <label for="f-entity">Tipo de documento</label>
+        <select id="f-entity">
+          <option value="media-item">Medios (media-item)</option>
+          <option value="">Todos los tipos</option>
+          <option value="asset">Activos (asset)</option>
+          <option value="asset-identifier">Identificadores de activo</option>
+          <option value="session">Sesiones</option>
+          <option value="observation">Observaciones</option>
+          <option value="form-template">Plantillas de formulario</option>
+          <option value="form-response">Respuestas de formulario</option>
+          <option value="transcript">Transcripciones</option>
+          <option value="device">Dispositivos</option>
+          <option value="sync-event">Eventos de sincronización</option>
+          <option value="thermal-capture">Capturas térmicas</option>
+        </select>
+      </div>
+      <div class="of-field">
+        <label for="f-asset">Activo</label>
+        <select id="f-asset">
+          <option value="">Todos los activos</option>
+        </select>
+      </div>
+      <button type="submit" class="of-btn primary">Aplicar</button>
+      <button type="button" id="clear-filters" class="of-btn">Limpiar</button>
+    </form>
+  </section>
+
+  <section id="map-section" class="of-card">
+    <h2 class="of-section-title">Mapa</h2>
+    <div id="map"></div>
+  </section>
+
+  <section id="gallery-section" class="of-card">
+    <h2 class="of-section-title">Medios por activo</h2>
+    <div id="by-asset"></div>
+  </section>
+
+  <section class="of-card">
+    <h2 class="of-section-title">Registro</h2>
+    <div id="table-wrap" style="overflow-x:auto">
+      <table class="of-table">
+        <thead><tr><th>ID</th><th>Tipo</th><th>Activo</th><th>Fecha</th><th>Tenant</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
 
 <script>
 const map = L.map('map').setView([-33.45, -70.65], 5);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
-
 const markerGroup = L.featureGroup().addTo(map);
+
+const $ = (id) => document.getElementById(id);
 
 function cell(value) {
   const td = document.createElement('td');
-  td.textContent = value == null ? '' : value;
+  td.textContent = value == null || value === '' ? '—' : value;
   return td;
 }
 
-async function load() {
-  const res = await fetch('/documents?entity_type=media-item');
-  const docs = await res.json();
-  const rows = document.getElementById('rows');
-  for (const d of docs) {
-    let lon = null, lat = null;
+function dateField(d) {
+  return d.captured_at || d.created_at || d.started_at || d.observed_at || null;
+}
+
+function emptyState(container, { icon = '🗂️', title, hint, cta } = {}) {
+  container.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'of-empty';
+  wrap.innerHTML = `
+    <div class="of-empty-icon">${icon}</div>
+    <p><strong>${title}</strong></p>
+    ${hint ? `<p>${hint}</p>` : ''}
+  `;
+  if (cta) {
+    const a = document.createElement('a');
+    a.className = 'of-nav-link';
+    a.href = cta.href;
+    a.textContent = cta.label;
+    wrap.appendChild(a);
+  }
+  container.appendChild(wrap);
+}
+
+function mediaCard(d) {
+  const card = document.createElement('div');
+  card.className = 'of-media-card';
+  card.id = `media-${d.id}`;
+  const href = d.assets && d.assets.primary && d.assets.primary.href;
+  if (href) {
+    const img = document.createElement('img');
+    img.src = href;
+    img.alt = d.id;
+    img.loading = 'lazy';
+    img.onerror = () => {
+      const ph = document.createElement('div');
+      ph.className = 'of-media-placeholder';
+      ph.textContent = 'sin imagen';
+      img.replaceWith(ph);
+    };
+    card.appendChild(img);
+  } else {
+    const ph = document.createElement('div');
+    ph.className = 'of-media-placeholder';
+    ph.textContent = d.type === 'audio' ? '🎙️ audio' : 'sin imagen';
+    card.appendChild(ph);
+  }
+  const meta = document.createElement('div');
+  meta.className = 'of-media-meta';
+  meta.innerHTML = `<div class="of-media-id">${d.id}</div><div>${(dateField(d) || '').slice(0, 19).replace('T', ' ')}</div>`;
+  card.appendChild(meta);
+  return card;
+}
+
+function popupHtml(d) {
+  const href = d.assets && d.assets.primary && d.assets.primary.href;
+  const img = href ? `<img src="${href}" alt="${d.id}">` : '';
+  return `<div class="of-popup">${img}<div><div>${d.type || 'media'}</div><div class="of-popup-id">${d.id}</div><a href="#media-${d.id}">Ver en galería</a></div></div>`;
+}
+
+function renderMap(mediaDocs) {
+  markerGroup.clearLayers();
+  for (const d of mediaDocs) {
     if (d.geometry && d.geometry.type === 'Point') {
-      [lon, lat] = d.geometry.coordinates;
+      const [lon, lat] = d.geometry.coordinates;
+      L.marker([lat, lon]).addTo(markerGroup).bindPopup(popupHtml(d));
     }
-    if (lon != null && lat != null) {
-      L.marker([lat, lon]).addTo(markerGroup).bindPopup(d.id);
-    }
-    // galería
-    const card = document.createElement('div');
-    card.className = 'card';
-    const href = d.assets && d.assets.primary && d.assets.primary.href;
-    if (href) {
-      const img = document.createElement('img');
-      img.src = href;
-      img.alt = d.id;
-      img.onerror = () => {
-        const ph = document.createElement('div');
-        ph.className = 'placeholder';
-        ph.textContent = 'sin imagen';
-        img.replaceWith(ph);
-      };
-      card.appendChild(img);
-    }
-    const label = document.createElement('div');
-    label.className = 'id';
-    label.textContent = d.id;
-    card.appendChild(label);
-    document.getElementById('gallery').appendChild(card);
-    // registro (tabla)
-    const tr = document.createElement('tr');
-    tr.appendChild(cell(d.id));
-    tr.appendChild(cell(d.type));
-    tr.appendChild(cell((d.captured_at || '').slice(0, 19)));
-    tr.appendChild(cell(lon));
-    tr.appendChild(cell(lat));
-    rows.appendChild(tr);
   }
   if (markerGroup.getLayers().length) {
     map.fitBounds(markerGroup.getBounds().pad(0.3), { maxZoom: 13 });
   }
 }
+
+function renderByAsset(mediaDocs, assetsById) {
+  const container = $('by-asset');
+  if (!mediaDocs.length) {
+    emptyState(container, {
+      icon: '📷',
+      title: 'Aún no hay medios capturados.',
+      hint: 'Comienza una sesión en la app de captura para ver fotos, audio y térmicas aquí.',
+      cta: { href: '/capture/', label: 'Ir a captura' },
+    });
+    return;
+  }
+  const groups = new Map();
+  for (const d of mediaDocs) {
+    const key = d.asset_id || 'sin-activo';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(d);
+  }
+  container.innerHTML = '';
+  for (const [assetId, items] of groups) {
+    const asset = assetsById.get(assetId);
+    const details = document.createElement('details');
+    details.className = 'of-asset-group';
+    details.open = groups.size <= 3;
+    const summary = document.createElement('summary');
+    const label = asset ? asset.name : (assetId === 'sin-activo' ? 'Sin activo asignado' : assetId);
+    summary.innerHTML = `${label} <span class="of-badge">${items.length} medio${items.length === 1 ? '' : 's'}</span>`;
+    details.appendChild(summary);
+    const gallery = document.createElement('div');
+    gallery.className = 'of-gallery';
+    for (const d of items) gallery.appendChild(mediaCard(d));
+    details.appendChild(gallery);
+    container.appendChild(details);
+  }
+}
+
+function renderTable(docs) {
+  const rows = $('rows');
+  rows.innerHTML = '';
+  if (!docs.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.className = 'of-empty';
+    td.textContent = 'No hay documentos con estos filtros.';
+    tr.appendChild(td);
+    rows.appendChild(tr);
+    return;
+  }
+  for (const d of docs) {
+    const tr = document.createElement('tr');
+    tr.appendChild(cell(d.id));
+    tr.appendChild(cell(d.type || d.entity_type || '—'));
+    tr.appendChild(cell(d.asset_id));
+    tr.appendChild(cell((dateField(d) || '').slice(0, 19).replace('T', ' ')));
+    tr.appendChild(cell(d.tenant_id));
+    rows.appendChild(tr);
+  }
+}
+
+function currentFilters() {
+  return {
+    tenant_id: $('f-tenant').value.trim(),
+    entity_type: $('f-entity').value,
+    asset_id: $('f-asset').value,
+  };
+}
+
+function applyFiltersToUrl(filters) {
+  const params = new URLSearchParams();
+  if (filters.tenant_id) params.set('tenant_id', filters.tenant_id);
+  if (filters.entity_type) params.set('entity_type', filters.entity_type);
+  if (filters.asset_id) params.set('asset_id', filters.asset_id);
+  const qs = params.toString();
+  history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
+}
+
+function filtersFromUrl() {
+  const params = new URLSearchParams(location.search);
+  return {
+    tenant_id: params.get('tenant_id') || '',
+    entity_type: params.get('entity_type') ?? 'media-item',
+    asset_id: params.get('asset_id') || '',
+  };
+}
+
+async function fetchDocs(entityType, tenantId) {
+  const params = new URLSearchParams();
+  if (entityType) params.set('entity_type', entityType);
+  if (tenantId) params.set('tenant_id', tenantId);
+  const res = await fetch(`/documents?${params.toString()}`);
+  if (!res.ok) throw new Error(`consulta falló: ${res.status}`);
+  return res.json();
+}
+
+function populateAssetFilter(assets, selected) {
+  const select = $('f-asset');
+  select.innerHTML = '<option value="">Todos los activos</option>';
+  for (const a of assets) {
+    const opt = document.createElement('option');
+    opt.value = a.id;
+    opt.textContent = a.name || a.id;
+    if (a.id === selected) opt.selected = true;
+    select.appendChild(opt);
+  }
+}
+
+async function load() {
+  const filters = filtersFromUrl();
+  $('f-tenant').value = filters.tenant_id;
+  $('f-entity').value = filters.entity_type;
+
+  const [assets, mediaDocs] = await Promise.all([
+    fetchDocs('asset', filters.tenant_id).catch(() => []),
+    fetchDocs('media-item', filters.tenant_id).catch(() => []),
+  ]);
+  const assetsById = new Map(assets.map((a) => [a.id, a]));
+  populateAssetFilter(assets, filters.asset_id);
+
+  const filteredMedia = filters.asset_id ? mediaDocs.filter((d) => d.asset_id === filters.asset_id) : mediaDocs;
+  const showMapAndGallery = filters.entity_type === 'media-item' || filters.entity_type === '';
+  $('map-section').style.display = showMapAndGallery ? '' : 'none';
+  $('gallery-section').style.display = showMapAndGallery ? '' : 'none';
+  if (showMapAndGallery) {
+    renderMap(filteredMedia);
+    renderByAsset(filteredMedia, assetsById);
+  }
+
+  let tableDocs = filteredMedia;
+  if (filters.entity_type && filters.entity_type !== 'media-item') {
+    tableDocs = await fetchDocs(filters.entity_type, filters.tenant_id).catch(() => []);
+    if (filters.asset_id) tableDocs = tableDocs.filter((d) => d.asset_id === filters.asset_id);
+  } else if (!filters.entity_type) {
+    tableDocs = await fetchDocs('', filters.tenant_id).catch(() => []);
+    if (filters.asset_id) tableDocs = tableDocs.filter((d) => d.asset_id === filters.asset_id);
+  }
+  renderTable(tableDocs);
+}
+
+$('filters').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const filters = currentFilters();
+  applyFiltersToUrl(filters);
+  load();
+});
+
+$('clear-filters').addEventListener('click', () => {
+  $('f-tenant').value = '';
+  $('f-entity').value = 'media-item';
+  history.replaceState(null, '', location.pathname);
+  load();
+});
+
 load();
 </script>
 </body>
