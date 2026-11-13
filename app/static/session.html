@@ -15,6 +15,7 @@
 <main class="of-shell">
   <nav class="of-breadcrumb">
     <a href="/">Dashboard</a> › <a id="crumb-asset" href="#">Activo</a> › <span>Sesión</span>
+    <label style="margin-left:auto; font-size:0.85rem"><input type="checkbox" id="show-deleted"> Mostrar eliminados</label>
   </nav>
 
   <section id="session-summary" class="of-card">
@@ -30,7 +31,7 @@
     <h2 class="of-section-title">Observaciones</h2>
     <div style="overflow-x:auto">
       <table class="of-table">
-        <thead><tr><th>Fecha</th><th>Tipo</th><th>Valor</th><th>Unidad</th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Tipo</th><th>Valor</th><th>Unidad</th><th></th></tr></thead>
         <tbody id="observations"></tbody>
       </table>
     </div>
@@ -43,9 +44,13 @@
 </main>
 
 <script type="module">
-import { emptyState, escapeHtml, formatDate, mediaCard } from "/static/js/dossier-common.js";
+import {
+  emptyState, escapeHtml, formatDate, mediaCard,
+  apiPatch, searchAssetsApi, itemActions,
+} from "/static/js/dossier-common.js";
 
 const $ = (id) => document.getElementById(id);
+let showDeleted = false;
 
 function show(id) { $(id).style.display = ''; }
 
@@ -68,6 +73,100 @@ function renderSummary(session, asset) {
   `;
 }
 
+// --- Edición en línea (ADR-0021) ---
+
+let _moveDialog = null;
+
+function moveMediaDialog(mediaItem) {
+  if (!_moveDialog) {
+    _moveDialog = document.createElement('dialog');
+    _moveDialog.className = 'of-card';
+    _moveDialog.style.maxWidth = '30rem';
+    _moveDialog.innerHTML = `
+      <h3 class="of-section-title">Mover a otro activo</h3>
+      <div class="of-field"><input type="search" placeholder="Buscar activo" maxlength="100" data-q></div>
+      <div class="of-field"><select data-target size="6" style="width:100%"></select></div>
+      <div class="of-actions">
+        <button class="of-btn primary" data-save>Mover</button>
+        <button class="of-btn" data-close>Cancelar</button>
+      </div>`;
+    _moveDialog.querySelector('[data-close]').addEventListener('click', () => _moveDialog.close());
+    _moveDialog.querySelector('[data-q]').addEventListener('input', async (e) => {
+      const assets = await searchAssetsApi(e.target.value);
+      _moveDialog.querySelector('[data-target]').innerHTML = assets
+        .filter((a) => a.status !== 'decommissioned')
+        .map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name || a.id)} (${escapeHtml(a.id)})</option>`)
+        .join('');
+    });
+    document.body.appendChild(_moveDialog);
+  }
+  const q = _moveDialog.querySelector('[data-q]');
+  q.value = '';
+  q.dispatchEvent(new Event('input'));
+  _moveDialog.querySelector('[data-save]').onclick = async () => {
+    const target = _moveDialog.querySelector('[data-target]').value;
+    if (!target) return;
+    try {
+      await apiPatch(mediaItem.id, { asset_id: target }, 'reasignación desde sesión');
+      _moveDialog.close();
+      load();
+    } catch (e) { alert('No se pudo mover: ' + e.message); }
+  };
+  _moveDialog.showModal();
+}
+
+function editObservationRow(tr, obs) {
+  tr.innerHTML = `
+    <td>${formatDate(obs.observed_at)}</td>
+    <td><input data-f="type" value="${escapeHtml(obs.type || '')}" maxlength="60" style="width:6rem"></td>
+    <td><input data-f="value" value="${escapeHtml(String(obs.value ?? ''))}" maxlength="2000" style="width:14rem"></td>
+    <td><input data-f="unit" value="${escapeHtml(obs.unit || '')}" maxlength="30" style="width:4rem"></td>`;
+  const td = document.createElement('td');
+  const save = document.createElement('button');
+  save.className = 'of-btn primary';
+  save.textContent = 'Guardar';
+  save.onclick = async () => {
+    const v = (f) => tr.querySelector(`[data-f="${f}"]`).value;
+    try {
+      await apiPatch(obs.id, { type: v('type'), value: v('value'), unit: v('unit') || null }, 'edición desde sesión');
+      load();
+    } catch (e) { alert('No se pudo guardar: ' + e.message); }
+  };
+  const cancel = document.createElement('button');
+  cancel.className = 'of-btn';
+  cancel.textContent = 'Cancelar';
+  cancel.onclick = load;
+  td.append(save, cancel);
+  tr.appendChild(td);
+}
+
+function editTranscriptCard(card, t) {
+  const p = card.querySelector('[data-text]');
+  const area = document.createElement('textarea');
+  area.rows = 4;
+  area.maxLength = 10000;
+  area.value = t.text;
+  area.style.width = '100%';
+  p.replaceWith(area);
+  const row = document.createElement('div');
+  row.className = 'of-actions';
+  const save = document.createElement('button');
+  save.className = 'of-btn primary';
+  save.textContent = 'Guardar';
+  save.onclick = async () => {
+    try {
+      await apiPatch(t.id, { text: area.value }, 'edición desde sesión');
+      load();
+    } catch (e) { alert('No se pudo guardar: ' + e.message); }
+  };
+  const cancel = document.createElement('button');
+  cancel.className = 'of-btn';
+  cancel.textContent = 'Cancelar';
+  cancel.onclick = load;
+  row.append(save, cancel);
+  card.appendChild(row);
+}
+
 function renderMedia(mediaItems) {
   show('media-section');
   if (!mediaItems.length) {
@@ -76,28 +175,59 @@ function renderMedia(mediaItems) {
   }
   const container = $('media');
   container.innerHTML = '';
-  for (const m of mediaItems) container.appendChild(mediaCard(m));
+  for (const m of mediaItems) {
+    const wrap = document.createElement('div');
+    if (m._deleted_at) wrap.className = 'of-deleted';
+    wrap.appendChild(mediaCard(m));
+    wrap.appendChild(itemActions({
+      id: m.id, kind: 'medio', deleted: Boolean(m._deleted_at),
+      onEdit: () => moveMediaDialog(m), onChanged: load,
+    }));
+    container.appendChild(wrap);
+  }
 }
 
 function renderObservations(observations) {
   if (!observations.length) return;
   show('observations-section');
-  $('observations').innerHTML = observations
-    .map((o) => `<tr><td>${formatDate(o.observed_at)}</td><td>${escapeHtml(o.type)}</td><td>${escapeHtml(String(o.value))}</td><td>${escapeHtml(o.unit || '—')}</td></tr>`)
-    .join('');
+  const tbody = $('observations');
+  tbody.innerHTML = '';
+  for (const o of observations) {
+    const tr = document.createElement('tr');
+    if (o._deleted_at) tr.className = 'of-deleted';
+    tr.innerHTML = `<td>${formatDate(o.observed_at)}</td><td>${escapeHtml(o.type)}</td><td>${escapeHtml(String(o.value))}</td><td>${escapeHtml(o.unit || '—')}</td>`;
+    const td = document.createElement('td');
+    td.appendChild(itemActions({
+      id: o.id, kind: 'observación', deleted: Boolean(o._deleted_at),
+      onEdit: () => editObservationRow(tr, o), onChanged: load,
+    }));
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
 }
 
 function renderTranscripts(transcripts) {
   if (!transcripts.length) return;
   show('transcripts-section');
-  $('transcripts').innerHTML = transcripts
-    .map((t) => `<div class="of-card" style="margin-bottom:0.5rem"><div class="of-badge">motor: ${escapeHtml(t.engine)}</div><p>${escapeHtml(t.text)}</p></div>`)
-    .join('');
+  const container = $('transcripts');
+  container.innerHTML = '';
+  for (const t of transcripts) {
+    const card = document.createElement('div');
+    card.className = 'of-card' + (t._deleted_at ? ' of-deleted' : '');
+    card.style.marginBottom = '0.5rem';
+    card.innerHTML = `<div class="of-badge">motor: ${escapeHtml(t.engine)} · idioma: ${escapeHtml(t.language || '—')}${t._deleted_at ? ' · <em>eliminada</em>' : ''}</div><p data-text>${escapeHtml(t.text)}</p>`;
+    card.appendChild(itemActions({
+      id: t.id, kind: 'transcripción', deleted: Boolean(t._deleted_at),
+      onEdit: () => editTranscriptCard(card, t), onChanged: load,
+    }));
+    container.appendChild(card);
+  }
 }
 
 async function load() {
   try {
-    const res = await fetch(location.pathname, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    const url = location.pathname + (showDeleted ? '?include_deleted=true' : '');
+    const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!res.ok) throw new Error(res.status === 404 ? 'Sesión no encontrada' : `Error ${res.status}`);
     const dossier = await res.json();
     renderSummary(dossier.session, dossier.asset);
@@ -108,6 +238,11 @@ async function load() {
     emptyState($('session-summary'), { icon: '⚠️', title: 'No se pudo cargar la sesión.', hint: e.message, cta: { href: '/', label: 'Volver al dashboard' } });
   }
 }
+
+$('show-deleted').addEventListener('change', (e) => {
+  showDeleted = e.target.checked;
+  load();
+});
 
 load();
 </script>

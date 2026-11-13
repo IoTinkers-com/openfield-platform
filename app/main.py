@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import MEDIA_DIR
+from .corrections import router as corrections_router
 from .csv_import import router as csv_router
 from .db import init_db
 from .dossier import router as dossier_router
@@ -61,6 +62,7 @@ app.include_router(resolve_router)
 app.include_router(transcribe_router)
 app.include_router(dossier_router)
 app.include_router(registry_router)
+app.include_router(corrections_router)
 app.include_router(csv_router)
 
 _STATIC = Path(__file__).parent / "static"

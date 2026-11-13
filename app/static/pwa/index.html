@@ -137,6 +137,16 @@
   </section>
 </main>
 
+<!-- Edición de ítems pendientes de la cola -->
+<dialog id="q-edit-dialog" class="of-card" style="max-width: 30rem;">
+  <h3 class="of-section-title">Editar pendiente</h3>
+  <div id="qe-fields"></div>
+  <div class="of-actions">
+    <button id="qe-save" class="of-btn primary">Guardar</button>
+    <button id="qe-cancel" class="of-btn" onclick="this.closest('dialog').close()">Cancelar</button>
+  </div>
+</dialog>
+
 <!-- Alta de activo en terreno -->
 <dialog id="new-asset-dialog" class="of-card" style="max-width: 32rem;">
   <h2 class="of-section-title">Nuevo activo</h2>
@@ -254,12 +264,23 @@ async function renderQueue() {
     doc: "Documento", media: "Foto/medio", audio: "Nota de voz",
     verify: "Verificación", "session-end": "Cierre de sesión",
   };
-  $("queue-list").innerHTML = items.map((it) => {
+  const DOC_LABELS = {
+    device: "Dispositivo", session: "Sesión", transcript: "Transcripción",
+    observation: "Comentario", asset: "Activo nuevo", "asset-identifier": "Identificador",
+    "media-item": "Medio",
+  };
+  const ul = $("queue-list");
+  ul.innerHTML = "";
+  for (const it of items) {
+    const li = document.createElement("li");
     const when = (it.created_at || "").slice(11, 19);
+    const label = it.kind === "doc" ? (DOC_LABELS[it.entity] || it.entity) : (KIND_LABELS[it.kind] || it.kind);
     const err = it.last_error ? ` — <span class="of-badge danger">${it.last_error}</span>` : "";
     const tries = it.attempts ? ` (intento ${it.attempts})` : "";
-    return `<li>${KIND_LABELS[it.kind] || it.kind} · ${when}${tries}${err}</li>`;
-  }).join("");
+    li.innerHTML = `<span>${label} · ${when}${tries}${err} </span>`;
+    for (const b of queueItemActions(it)) li.appendChild(b);
+    ul.appendChild(li);
+  }
   renderSteps();
 }
 
@@ -424,7 +445,9 @@ async function saveVerification() {
     assetNotFound,
     note: $("verify-note").value.trim() || null,
   });
-  await queue.enqueue({ kind: "verify", asset_id: currentAsset.id, payload });
+  // Copia previa del activo para poder deshacer la verificación optimista (EC-6).
+  const asset_before = JSON.parse(JSON.stringify(currentAsset));
+  await queue.enqueue({ kind: "verify", asset_id: currentAsset.id, payload, asset_before });
   try {
     applyVerificationLocally(currentAsset, type, payload);
     await store.put("kv", { key: "catalog.assets", value: catalog.assets });
@@ -707,6 +730,101 @@ async function saveNewAsset() {
   await selectAsset(asset);
 }
 
+// --- Acciones sobre ítems de la cola (EC-6 · ADR-0021/0023) ---
+
+let syncing = false;
+
+function queueItemActions(item) {
+  const out = [];
+  const mk = (label, title, fn) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "of-btn";
+    b.style.cssText = "padding:0.1rem 0.4rem; font-size:0.8rem";
+    b.textContent = label;
+    b.title = title;
+    b.disabled = syncing;
+    b.addEventListener("click", fn);
+    return b;
+  };
+  const discard = (what) => mk("🗑", `Descartar ${what}`, async () => {
+    if (!confirm(`¿Descartar ${what}?`)) return;
+    await queue.remove(item.qid);
+    await renderQueue();
+  });
+
+  if (item.kind === "doc" && (item.entity === "transcript" || item.entity === "observation")) {
+    out.push(mk("✎", "Editar texto", () => openQueueEdit(item)));
+  } else if (item.kind === "doc" && item.entity === "asset") {
+    out.push(mk("✎", "Editar activo nuevo", () => openQueueEdit(item)));
+  } else if (item.kind === "media" || item.kind === "audio") {
+    out.push(discard(item.kind === "media" ? "el medio" : "la nota de voz"));
+  } else if (item.kind === "verify") {
+    out.push(mk("🗑", "Deshacer verificación", async () => {
+      if (!confirm("¿Deshacer esta verificación pendiente?")) return;
+      // Revierte la aplicación optimista sobre el catálogo en caché.
+      if (item.asset_before) {
+        const i = catalog.assets.findIndex((a) => a.id === item.asset_id);
+        if (i >= 0) catalog.assets[i] = item.asset_before;
+        await store.put("kv", { key: "catalog.assets", value: catalog.assets });
+        if (currentAsset?.id === item.asset_id) {
+          currentAsset = item.asset_before;
+          renderVerifyForm();
+        }
+      }
+      await queue.remove(item.qid);
+      await renderQueue();
+      renderAssetList();
+      setStatus("Verificación deshecha.", "");
+    }));
+  }
+  return out;
+}
+
+// Diálogo genérico de edición de ítems pendientes.
+function openQueueEdit(item) {
+  const dlg = $("q-edit-dialog");
+  const fields = $("qe-fields");
+  fields.innerHTML = "";
+  if (item.entity === "transcript") {
+    fields.innerHTML = `<div class="of-field"><label>Texto de la transcripción</label>
+      <textarea data-f="text" rows="4" maxlength="10000" style="width:100%"></textarea></div>`;
+    fields.querySelector('[data-f="text"]').value = item.doc.text || "";
+  } else if (item.entity === "observation") {
+    fields.innerHTML = `<div class="of-field"><label>Comentario</label>
+      <textarea data-f="value" rows="4" maxlength="2000" style="width:100%"></textarea></div>`;
+    fields.querySelector('[data-f="value"]').value = item.doc.value || "";
+  } else if (item.entity === "asset") {
+    const attrs = Object.keys(item.doc.attributes || {});
+    fields.innerHTML = `<div class="of-field"><label>Nombre</label>
+      <input data-f="name" type="text" maxlength="200"></div>
+      ${attrs.map((k) => `<div class="of-field"><label>${k}</label>
+        <input data-attr="${k}" type="text" maxlength="2000"></div>`).join("")}`;
+    fields.querySelector('[data-f="name"]').value = item.doc.name || "";
+    for (const k of attrs) {
+      fields.querySelector(`[data-attr="${k}"]`).value = item.doc.attributes[k] ?? "";
+    }
+  }
+  $("qe-save").onclick = async () => {
+    const doc = { ...item.doc };
+    if (item.entity === "transcript") doc.text = fields.querySelector('[data-f="text"]').value;
+    else if (item.entity === "observation") doc.value = fields.querySelector('[data-f="value"]').value;
+    else if (item.entity === "asset") {
+      doc.name = fields.querySelector('[data-f="name"]').value || doc.name;
+      const attrs = { ...(doc.attributes || {}) };
+      for (const el of fields.querySelectorAll("[data-attr]")) attrs[el.dataset.attr] = el.value || null;
+      doc.attributes = attrs;
+      const i = catalog.assets.findIndex((a) => a.id === doc.id);
+      if (i >= 0) catalog.assets[i] = doc;
+      await store.put("kv", { key: "catalog.assets", value: catalog.assets });
+    }
+    await queue.update(item.qid, { doc });
+    dlg.close();
+    await renderQueue();
+  };
+  dlg.showModal();
+}
+
 // --- Sincronización ---
 
 async function syncItem(item) {
@@ -750,18 +868,25 @@ async function syncItem(item) {
 
 async function syncAll() {
   if (recording) { setStatus("⚠️ Detén la grabación antes de sincronizar.", "warn"); return; }
+  if (syncing) return;
+  syncing = true;
   setStatus("⏳ Sincronizando…");
-  const res = await queue.flush(syncItem);
-  log(`sincronización: ${res.synced} ok, ${res.failed} fallidos`);
-  if (res.failed) {
-    setStatus(`⚠️ ${res.failed} elemento(s) no se pudieron sincronizar; quedan en la cola.`, "warn");
-  } else if (res.synced) {
-    setStatus("✅ Sincronización completa.", "ok");
-    await refreshCatalog();
-  } else {
-    setStatus("No había pendientes.", "");
+  await renderQueue(); // bloquea las acciones de ítems durante el flush
+  try {
+    const res = await queue.flush(syncItem);
+    log(`sincronización: ${res.synced} ok, ${res.failed} fallidos`);
+    if (res.failed) {
+      setStatus(`⚠️ ${res.failed} elemento(s) no se pudieron sincronizar; quedan en la cola.`, "warn");
+    } else if (res.synced) {
+      setStatus("✅ Sincronización completa.", "ok");
+      await refreshCatalog();
+    } else {
+      setStatus("No había pendientes.", "");
+    }
+  } finally {
+    syncing = false;
+    await renderQueue();
   }
-  await renderQueue();
 }
 
 // --- Eventos ---
