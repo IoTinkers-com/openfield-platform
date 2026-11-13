@@ -19,10 +19,34 @@ export async function ingest(entityType, doc, baseUrl = "") {
   return res.json();
 }
 
-export async function transcribeAudio(blob, baseUrl = "") {
+export async function transcribeAudio(blob, baseUrl = "", { language = "es", filename } = {}) {
+  const name = filename || (blob && blob.type && blob.type.includes("mp4") ? "audio.m4a" : "audio.webm");
   const form = new FormData();
-  form.append("file", blob, "audio.webm");
-  const res = await fetch(`${baseUrl}/transcribe`, { method: "POST", body: form });
+  form.append("file", blob, name);
+  const res = await fetch(`${baseUrl}/transcribe?language=${encodeURIComponent(language)}`, {
+    method: "POST",
+    body: form,
+  });
   if (!res.ok) throw new Error(`transcribe failed: ${res.status}`);
   return res.json(); // { text, engine }
+}
+
+export async function postVerify(assetId, payload, baseUrl = "") {
+  const res = await fetch(`${baseUrl}/assets/${encodeURIComponent(assetId)}/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`verify failed: ${res.status}`);
+  return res.json();
+}
+
+export async function endSessionRemote(sessionId, endedAt, baseUrl = "") {
+  const res = await fetch(`${baseUrl}/sessions/${encodeURIComponent(sessionId)}/end`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ended_at: endedAt }),
+  });
+  if (!res.ok) throw new Error(`session-end failed: ${res.status}`);
+  return res.json();
 }

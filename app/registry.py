@@ -6,6 +6,7 @@ siendo solo de creación (ADR-0021). Sin autenticación todavía (D13): H-AUTH.
 """
 import copy
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -150,6 +151,13 @@ class VerifyIn(BaseModel):
     results: list[VerifyResultIn] = Field(default_factory=list, max_length=200)
     asset_not_found: bool = False
     note: str | None = Field(default=None, max_length=2000)
+
+
+class SessionEndIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ended_at: str = Field(min_length=10, max_length=40)
+    op_id: str | None = Field(default=None, max_length=100)
 
 
 # ---------------------------------------------------------------------------
@@ -855,3 +863,40 @@ def document_history(
             }
         )
     return out
+
+
+# ---------------------------------------------------------------------------
+# Sesiones de campo (ADR-0023)
+# ---------------------------------------------------------------------------
+
+
+def _parse_iso(raw: str):
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+
+
+@router.post("/sessions/{session_id}/end")
+def end_session(session_id: str, payload: SessionEndIn, db: Session = Depends(get_db)):
+    row = _get_doc(db, session_id, "session")
+    body = copy.deepcopy(row.body)
+
+    if payload.op_id and op_applied(db, payload.op_id):
+        return {"status": "already_applied", "session": row.body}
+    if body.get("ended_at"):
+        return {"status": "already_closed", "session": row.body}
+
+    ended = _parse_iso(payload.ended_at)
+    if ended is None:
+        raise HTTPException(status_code=422, detail="ended_at inválido")
+    started = _parse_iso(body.get("started_at") or "")
+    if started is not None and ended < started:
+        raise HTTPException(status_code=422, detail="ended_at no puede ser anterior a started_at")
+    if ended > datetime.now(timezone.utc) + timedelta(minutes=5):
+        raise HTTPException(status_code=422, detail="ended_at no puede ser futuro")
+
+    body["ended_at"] = payload.ended_at
+    save_update(db, row, body, action="update", source="field", op_id=payload.op_id)
+    db.commit()
+    return {"status": "closed", "session": row.body}

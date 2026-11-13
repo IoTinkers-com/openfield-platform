@@ -16,7 +16,7 @@ def register_engine(name, fn):
     ENGINES[name] = fn
 
 
-def _stub(_audio: bytes) -> str:
+def _stub(_audio: bytes, _language: str | None = None) -> str:
     return "(transcripción no disponible: motor stub — instala faster-whisper para el motor real)"
 
 
@@ -29,7 +29,7 @@ def _load_whisper():
 
         _model = None
 
-        def _whisper(audio_bytes: bytes) -> str:
+        def _whisper(audio_bytes: bytes, language: str | None = None) -> str:
             nonlocal _model
             if _model is None:
                 _model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8")
@@ -37,7 +37,7 @@ def _load_whisper():
                 f.write(audio_bytes)
                 path = f.name
             try:
-                segments, _ = _model.transcribe(path)
+                segments, _ = _model.transcribe(path, language=language)
                 return "".join(s.text for s in segments).strip()
             finally:
                 os.unlink(path)
@@ -54,12 +54,14 @@ if _whisper_fn is not None:
 DEFAULT_ENGINE = "whisper" if "whisper" in ENGINES else "stub"
 
 
-def transcribe(audio_bytes: bytes, engine: str | None = None) -> dict:
+def transcribe(
+    audio_bytes: bytes, engine: str | None = None, language: str | None = None
+) -> dict:
     name = engine or DEFAULT_ENGINE
     fn = ENGINES.get(name)
     if fn is None:
         return {"text": "", "engine": name, "error": f"motor no disponible: {name}"}
     try:
-        return {"text": fn(audio_bytes), "engine": name}
+        return {"text": fn(audio_bytes, language), "engine": name}
     except Exception as exc:  # pragma: no cover
         return {"text": "", "engine": name, "error": str(exc)}

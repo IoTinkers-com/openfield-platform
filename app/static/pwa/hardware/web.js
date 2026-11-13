@@ -11,6 +11,16 @@ function dataUrlFromBlob(blob) {
   });
 }
 
+const AUDIO_MIME_CANDIDATES = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm"];
+
+export function pickAudioMimeType() {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return "";
+  for (const m of AUDIO_MIME_CANDIDATES) {
+    if (MediaRecorder.isTypeSupported(m)) return m;
+  }
+  return "";
+}
+
 export function webHardware() {
   return assertHardware({
     capabilities() {
@@ -30,6 +40,41 @@ export function webHardware() {
         );
       });
     },
+
+    // --- Cámaras (ADR-0023) ---
+    // Las etiquetas solo están disponibles después de conceder el permiso;
+    // sin permiso devolvemos "Cámara N".
+    async listCameras() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter((d) => d.kind === "videoinput");
+      return cams.map((d, i) => ({
+        deviceId: d.deviceId,
+        label: d.label || `Cámara ${i + 1}`,
+        groupId: d.groupId || null,
+      }));
+    },
+
+    async openCamera({ deviceId = null, facingMode = "environment" } = {}) {
+      const video = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: facingMode } };
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+      } catch (e) {
+        // Si el deviceId exacto falla, reintenta por orientación.
+        if (deviceId && (e.name === "OverconstrainedError" || e.name === "NotFoundError")) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facingMode } }, audio: false });
+        } else {
+          throw e;
+        }
+      }
+      const track = stream.getVideoTracks()[0];
+      return {
+        stream,
+        settings: track?.getSettings ? track.getSettings() : {},
+        label: track?.label || "",
+      };
+    },
+
     async captureImage(videoEl) {
       // Reusa el stream del preview (no abre una segunda cámara).
       if (!videoEl || !videoEl.videoWidth) throw new Error("cámara no iniciada");
@@ -41,20 +86,61 @@ export function webHardware() {
       const href = await dataUrlFromBlob(blob);
       return { href, blob };
     },
-    async recordAudio(durationMs = 3000) {
-      // Duración configurable. La transcripción local (Whisper WASM por validar, ADR-0008)
-      // se reserva para una fase posterior; hoy transcribe el backend.
+
+    // --- Nota de voz iniciar/detener libre (ADR-0023) ---
+    async startAudioRecording({ maxMs = 300000, onTick } = {}) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      const mimeType = pickAudioMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       const chunks = [];
-      recorder.ondataavailable = (e) => chunks.push(e.data);
-      const stopped = new Promise((resolve) => (recorder.onstop = resolve));
-      recorder.start();
+      const startedAt = Date.now();
+      let autoStopped = false;
+      let tickTimer = null;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size) chunks.push(e.data);
+      };
+      const stopped = new Promise((resolve) => {
+        recorder.onstop = resolve;
+      });
+      recorder.start(1000);
+
+      const elapsed = () => Date.now() - startedAt;
+      if (typeof onTick === "function") {
+        tickTimer = setInterval(() => onTick(elapsed()), 250);
+      }
+      const maxTimer = setTimeout(() => {
+        autoStopped = true;
+        if (recorder.state !== "inactive") recorder.stop();
+      }, maxMs);
+
+      function cleanup() {
+        clearTimeout(maxTimer);
+        if (tickTimer) clearInterval(tickTimer);
+        stream.getTracks().forEach((t) => t.stop());
+      }
+
+      return {
+        async stop() {
+          if (recorder.state !== "inactive") recorder.stop();
+          await stopped;
+          cleanup();
+          const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
+          return { blob, durationMs: elapsed(), mimeType: blob.type, autoStopped };
+        },
+        cancel() {
+          if (recorder.state !== "inactive") recorder.stop();
+          stopped.then(() => cleanup());
+        },
+      };
+    },
+
+    async recordAudio(durationMs = 3000) {
+      // Compatibilidad con la firma anterior (duración fija).
+      const rec = await this.startAudioRecording({ maxMs: durationMs });
       await new Promise((r) => setTimeout(r, durationMs));
-      recorder.stop();
-      await stopped;
-      stream.getTracks().forEach((t) => t.stop());
-      return { href: null, blob: new Blob(chunks, { type: "audio/webm" }), text: null };
+      const out = await rec.stop();
+      return { href: null, blob: out.blob, text: null, durationMs: out.durationMs, mimeType: out.mimeType };
     },
   });
 }

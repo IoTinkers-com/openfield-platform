@@ -31,7 +31,7 @@ export function createDevice(deviceId = newId("dev"), hw = simulatedHardware()) 
   };
 }
 
-export async function startSession({ deviceId, assetId = null } = {}, hw = simulatedHardware()) {
+export async function startSession({ deviceId, assetId = null, operator = "operador" } = {}, hw = simulatedHardware()) {
   const caps = hw.capabilities();
   const loc = await hw.getLocation();
   return {
@@ -39,7 +39,7 @@ export async function startSession({ deviceId, assetId = null } = {}, hw = simul
     tenant_id: TENANT_ID,
     id: newId("sess"),
     device_id: deviceId,
-    operator: "operador",
+    operator,
     asset_id: assetId,
     started_at: now(),
     ended_at: null,
@@ -49,6 +49,10 @@ export async function startSession({ deviceId, assetId = null } = {}, hw = simul
     consent: { recorded: true, method: "checkbox" },
     created_at: now(),
   };
+}
+
+export function endSession(session) {
+  return { ...session, ended_at: now() };
 }
 
 export async function captureImage({ sessionId, assetId, href, geometry, seq = 1 } = {}, hw = simulatedHardware()) {
@@ -71,18 +75,37 @@ export async function captureImage({ sessionId, assetId, href, geometry, seq = 1
   };
 }
 
-export function recordAudio({ sessionId, assetId, engine = "simulated", text = "(transcripción pendiente)" } = {}) {
+export function recordAudio({ sessionId, assetId, mediaItemId = null, engine = "simulated", text = "(transcripción pendiente)", language = "es" } = {}) {
   return {
     schema_version: SCHEMA_VERSION,
     tenant_id: TENANT_ID,
     id: newId("tr"),
-    media_item_id: null,
+    media_item_id: mediaItemId,
     session_id: sessionId,
     asset_id: assetId,
     text,
-    language: "es",
+    language,
     engine, // D7: registrar qué motor generó la transcripción
     confidence: 0.95,
+    created_at: now(),
+  };
+}
+
+// Nota/comentario de terreno escrito con el teclado nativo (ADR-0023).
+export function recordNote({ sessionId, assetId, mediaItemId = null, text } = {}) {
+  return {
+    schema_version: SCHEMA_VERSION,
+    tenant_id: TENANT_ID,
+    id: newId("obs"),
+    asset_id: assetId,
+    session_id: sessionId,
+    media_item_id: mediaItemId,
+    type: "note",
+    value: text,
+    unit: null,
+    observed_at: now(),
+    form_response_id: null,
+    metadata: {},
     created_at: now(),
   };
 }

@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
@@ -10,7 +10,10 @@
 <body>
 <header class="of-topbar">
   <a class="of-brand" href="/"><span class="of-logo"></span> OpenField · Captura</a>
-  <a class="of-nav-link secondary" href="/">← Dashboard</a>
+  <nav>
+    <a class="of-nav-link secondary" href="/admin/">Administración</a>
+    <a class="of-nav-link secondary" href="/">← Dashboard</a>
+  </nav>
 </header>
 
 <main class="of-shell">
@@ -18,34 +21,111 @@
     <div class="of-actions" style="justify-content: space-between; margin-top:0;">
       <div id="steps" class="of-steps" style="flex: 1 1 auto; margin: 0;"></div>
       <span id="conn-badge" class="of-badge"></span>
+      <span id="queue-badge" class="of-badge ok">Sin pendientes</span>
     </div>
+
+    <details id="settings">
+      <summary>Ajustes</summary>
+      <div class="of-field">
+        <label for="operator">Operador</label>
+        <input id="operator" type="text" maxlength="80" placeholder="Tu nombre">
+      </div>
+      <div class="of-field">
+        <label><input type="checkbox" id="keep-audio"> Guardar audio original (ADR-0007)</label>
+      </div>
+      <div class="of-field">
+        <label for="rec-max">Tope de nota de voz (minutos)</label>
+        <input id="rec-max" type="number" min="1" max="30" value="5" style="width:4rem">
+      </div>
+      <p class="of-status">Para dictar comentarios usa el micrófono del teclado del teléfono.
+      En Android, descarga el idioma en Gboard para dictar sin conexión.</p>
+    </details>
 
     <div class="of-consent-row">
       <label><input type="checkbox" id="consent"> Acepto el registro de captura</label>
       <span class="of-badge" id="indicator-badge"><span class="of-dot" id="indicator"></span> Grabación: inactiva</span>
     </div>
 
-    <div class="of-actions">
-      <video id="preview" class="of-capture-video" autoplay playsinline muted></video>
+    <!-- Paso 2: selector de activo -->
+    <div id="asset-picker">
+      <h2 class="of-section-title">Activo</h2>
+      <div class="of-field">
+        <input id="asset-search" type="search" placeholder="Buscar por nombre, TAG o ubicación" maxlength="100">
+      </div>
+      <div class="of-actions">
+        <label><input type="checkbox" id="pending-only"> Solo pendientes</label>
+        <button id="scan-qr" class="of-btn" hidden>Escanear QR</button>
+        <button id="new-asset" class="of-btn">+ Nuevo activo</button>
+      </div>
+      <p id="catalog-info" class="of-status"></p>
+      <ul id="asset-list" class="of-list"></ul>
     </div>
 
-    <div class="of-actions">
-      <button id="start" class="of-btn primary" disabled>Iniciar sesión</button>
-      <div class="of-field" style="flex-direction:row; align-items:center; gap:0.4rem;">
-        <label for="camera">Cámara</label>
-        <select id="camera"><option value="environment">Trasera</option><option value="user">Frontal</option></select>
+    <!-- Paso 3: panel del activo elegido -->
+    <div id="asset-panel" hidden>
+      <h2 class="of-section-title" id="asset-title"></h2>
+      <div class="of-actions">
+        <button id="tab-verify" class="of-btn">Verificar ficha</button>
+        <button id="tab-capture" class="of-btn">Capturar</button>
+        <button id="end-session" class="of-btn danger">Terminar sesión</button>
       </div>
-      <button id="capture" class="of-btn" disabled>📷 Capturar foto</button>
-      <div class="of-field" style="flex-direction:row; align-items:center; gap:0.4rem;">
-        <label for="duration">Audio (s)</label>
-        <input id="duration" type="number" min="1" max="120" value="3" style="width:3.5rem">
+
+      <!-- Pestaña verificar -->
+      <div id="verify-panel">
+        <progress id="verify-progress" max="100" value="0" style="width:100%"></progress>
+        <p id="verify-progress-text" class="of-status"></p>
+        <div id="verify-form"></div>
+        <div class="of-field">
+          <label for="verify-note">Nota de verificación</label>
+          <textarea id="verify-note" rows="2" maxlength="2000"></textarea>
+        </div>
+        <div class="of-actions">
+          <label><input type="checkbox" id="asset-not-found"> Activo no encontrado en sitio</label>
+          <button id="save-verify" class="of-btn primary">Guardar verificación</button>
+          <button id="goto-plate" class="of-btn">📷 Foto de placa</button>
+        </div>
       </div>
-      <button id="audio" class="of-btn" disabled>🎙️ Nota de audio</button>
+
+      <!-- Pestaña capturar -->
+      <div id="capture-panel" hidden>
+        <video id="preview" class="of-capture-video" autoplay playsinline muted></video>
+        <div class="of-actions">
+          <div class="of-field" style="flex-direction:row; align-items:center; gap:0.4rem;">
+            <label for="camera">Cámara</label>
+            <select id="camera"></select>
+          </div>
+          <span id="camera-info" class="of-status"></span>
+        </div>
+        <div class="of-actions">
+          <button id="capture" class="of-btn">📷 Foto</button>
+        </div>
+        <div class="of-actions">
+          <button id="rec-toggle" class="of-btn">● Grabar nota de voz</button>
+          <span id="rec-timer" class="of-status"></span>
+        </div>
+        <div id="transcript-area" hidden>
+          <div class="of-field">
+            <label for="transcript-edit">Transcripción (editable)</label>
+            <textarea id="transcript-edit" rows="3" maxlength="2000"></textarea>
+          </div>
+          <div class="of-actions">
+            <button id="save-transcript" class="of-btn primary">Guardar transcripción</button>
+            <button id="discard-transcript" class="of-btn">Descartar</button>
+          </div>
+        </div>
+        <div class="of-field">
+          <label for="comment">Comentario (teclado / dictado del teclado)</label>
+          <textarea id="comment" rows="3" maxlength="2000"></textarea>
+        </div>
+        <button id="save-comment" class="of-btn">Guardar comentario</button>
+      </div>
     </div>
 
+    <!-- Paso 4: cola -->
+    <h2 class="of-section-title">Cola de sincronización</h2>
+    <ul id="queue-list" class="of-list"></ul>
     <div class="of-actions" style="justify-content: space-between;">
-      <button id="sync" class="of-btn primary" disabled>⤒ Sincronizar</button>
-      <span id="queue-badge" class="of-badge ok">Sin pendientes</span>
+      <button id="sync" class="of-btn primary">⤒ Sincronizar</button>
     </div>
 
     <div id="status" class="of-status"></div>
@@ -57,21 +137,61 @@
   </section>
 </main>
 
+<!-- Alta de activo en terreno -->
+<dialog id="new-asset-dialog" class="of-card" style="max-width: 32rem;">
+  <h2 class="of-section-title">Nuevo activo</h2>
+  <div class="of-field">
+    <label for="na-type">Tipo</label>
+    <select id="na-type"></select>
+  </div>
+  <div class="of-field">
+    <label for="na-name">Nombre *</label>
+    <input id="na-name" type="text" maxlength="200">
+  </div>
+  <div class="of-field">
+    <label for="na-tag">TAG</label>
+    <input id="na-tag" type="text" maxlength="120">
+  </div>
+  <div class="of-field">
+    <label for="na-status">Estado</label>
+    <select id="na-status"></select>
+  </div>
+  <div id="na-attrs"></div>
+  <div class="of-actions">
+    <button id="na-save" class="of-btn primary">Enrolar</button>
+    <button id="na-cancel" class="of-btn">Cancelar</button>
+  </div>
+</dialog>
+
 <script type="module">
-// Mismo origen (servida por la plataforma): la API está en el mismo host.
+// Sirve el repo raíz (p. ej. `python -m http.server`) y abre /public/.
 import { webHardware } from "./hardware/web.js";
-import { createDevice, startSession, captureImage, recordAudio } from "./capture.js";
-import { uploadMedia, ingest, transcribeAudio } from "./sync.js";
-import { newId } from "./ids.js";
+import { createDevice, startSession, endSession, captureImage, recordAudio, recordNote } from "./capture.js";
+import { uploadMedia, ingest, transcribeAudio, postVerify, endSessionRemote } from "./sync.js";
+import { newId, now } from "./ids.js";
+import { createIndexedDbStore, blobToStored, storedToBlob } from "./store.js";
+import { createPersistentQueue } from "./queue.js";
+import {
+  loadCatalog, searchAssets, tagsByAsset, findAssetByTag,
+  parseValue, computeVerificationStatus, applyVerificationLocally,
+  buildVerifyPayload, newFieldAsset, relevantAttrs,
+} from "./assets.js";
+import { statusBadge, verificationBadge, attrVerificationBadge, STATUS_LABELS } from "./labels.js";
 
 const BASE_URL = ""; // mismo origen
+const TENANT_ID = "tenant-001";
 const hw = webHardware();
-const queue = []; // { kind: "media", doc, blob } | { kind: "doc", entity, doc }
+const store = createIndexedDbStore();
+const queue = createPersistentQueue(store);
+
 let session = null;
-let assetLocation = null; // fallback interior (D2: QR/TAG del activo)
-const deviceId = newId("dev");
+let currentAsset = null;
+let catalog = { assets: [], types: [], identifiers: [] };
 let stream = null;
-let syncedOnce = false;
+let recording = null; // { stop(), cancel() } de startAudioRecording
+let pendingAudio = null; // { blob, durationMs, mimeType } a la espera de transcripción/guardado
+const deviceId = localStorage.getItem("of.deviceId") || newId("dev");
+localStorage.setItem("of.deviceId", deviceId);
 
 const $ = (id) => document.getElementById(id);
 const log = (msg) => {
@@ -80,13 +200,12 @@ const log = (msg) => {
   el.scrollTop = el.scrollHeight;
 };
 
-// Mensajes de error amigables en español; el detalle técnico siempre queda en el registro (log).
 function friendlyError(e) {
   const name = e && e.name;
   const msg = (e && e.message) || String(e);
   if (name === "NotAllowedError") return "Permiso denegado: habilita el acceso a cámara/micrófono en Ajustes del navegador.";
   if (name === "NotFoundError" || name === "OverconstrainedError") return "No se encontró cámara o micrófono en este dispositivo.";
-  if (/upload failed|ingest failed|transcribe failed/.test(msg)) return "No se pudo conectar con la plataforma; el dato queda en la cola local para reintentar.";
+  if (/upload failed|ingest failed|transcribe failed|verify failed|session-end failed/.test(msg)) return "No se pudo conectar con la plataforma; el dato queda en la cola local para reintentar.";
   if (/Failed to fetch|NetworkError|network/i.test(msg)) return "Sin conexión con la plataforma. Lo capturado se guarda localmente.";
   return "Ocurrió un problema: " + msg;
 }
@@ -97,165 +216,654 @@ function setStatus(message, level = "") {
   el.className = "of-status" + (level ? " " + level : "");
 }
 
-// Indicador de conexión a internet (no confundir con conexión a la plataforma).
 function updateConnectionBadge() {
   const online = navigator.onLine;
   const badge = $("conn-badge");
   badge.className = "of-badge " + (online ? "ok" : "danger");
   badge.innerHTML = `<span class="of-dot"></span> ${online ? "En línea" : "Sin conexión: se guarda localmente"}`;
 }
-window.addEventListener("online", updateConnectionBadge);
+window.addEventListener("online", () => { updateConnectionBadge(); renderQueue(); });
 window.addEventListener("offline", updateConnectionBadge);
 
-// Estados visuales del flujo de captura (D15: consentimiento antes que nada).
 const STEP_DEFS = [
   ["consent", "Consentimiento"],
-  ["session", "Sesión"],
-  ["capture", "Captura"],
+  ["asset", "Activo"],
+  ["capture", "Captura / Verificación"],
   ["sync", "Sincronizar"],
 ];
-function renderSteps() {
-  const consentGiven = $("consent").checked;
-  const sessionStarted = Boolean(session);
+async function renderSteps() {
+  const pending = await queue.count();
   const done = new Set();
-  if (consentGiven) done.add("consent");
-  if (sessionStarted) done.add("session");
-  if (syncedOnce && queue.length === 0) done.add("sync");
-  const active = !consentGiven ? "consent" : !sessionStarted ? "session" : queue.length > 0 ? "sync" : "capture";
+  if ($("consent").checked) done.add("consent");
+  if (currentAsset) done.add("asset");
+  if (pending === 0 && currentAsset) done.add("sync");
+  const active = !$("consent").checked ? "consent" : !currentAsset ? "asset" : pending > 0 ? "sync" : "capture";
   $("steps").innerHTML = STEP_DEFS.map(([key, label], i) => {
     const state = done.has(key) ? "done" : key === active ? "active" : "";
     return `<div class="of-step ${state}"><span class="of-step-num">${i + 1}</span>${label}</div>`;
   }).join("");
 }
 
-function updateQueueBadge() {
+async function renderQueue() {
+  const items = await queue.list();
   const badge = $("queue-badge");
-  $("sync").textContent = queue.length ? `⤒ Sincronizar (${queue.length})` : "⤒ Sincronizar";
-  badge.textContent = queue.length ? `${queue.length} pendiente${queue.length === 1 ? "" : "s"}` : "Sin pendientes";
-  badge.className = "of-badge " + (queue.length ? "warn" : "ok");
+  $("sync").textContent = items.length ? `⤒ Sincronizar (${items.length})` : "⤒ Sincronizar";
+  badge.textContent = items.length ? `${items.length} pendiente${items.length === 1 ? "" : "s"}` : "Sin pendientes";
+  badge.className = "of-badge " + (items.length ? "warn" : "ok");
+  const KIND_LABELS = {
+    doc: "Documento", media: "Foto/medio", audio: "Nota de voz",
+    verify: "Verificación", "session-end": "Cierre de sesión",
+  };
+  $("queue-list").innerHTML = items.map((it) => {
+    const when = (it.created_at || "").slice(11, 19);
+    const err = it.last_error ? ` — <span class="of-badge danger">${it.last_error}</span>` : "";
+    const tries = it.attempts ? ` (intento ${it.attempts})` : "";
+    return `<li>${KIND_LABELS[it.kind] || it.kind} · ${when}${tries}${err}</li>`;
+  }).join("");
   renderSteps();
 }
+
+// --- Catálogo / selector de activo ---
+
+function catalogTags() { return tagsByAsset(catalog.identifiers); }
+
+function renderCatalogInfo() {
+  if (!catalog.updated_at) {
+    $("catalog-info").textContent = catalog.assets.length
+      ? "Catálogo local (sin fecha de descarga)"
+      : "Sin catálogo. Conéctate una vez para descargarlo.";
+    return;
+  }
+  const when = catalog.updated_at.slice(11, 19);
+  $("catalog-info").textContent = catalog.fromCache
+    ? `Sin conexión: usando catálogo guardado (${when})`
+    : `Catálogo actualizado ${when} · ${catalog.assets.length} activos`;
+}
+
+function assetProgress(a) {
+  const type = catalog.types.find((t) => t.id === a.asset_type_id);
+  const relevant = type ? relevantAttrs(type) : [];
+  if (!relevant.length) return a.verification_status === "verified" ? 100 : 0;
+  const av = a.attribute_verification || {};
+  const done = relevant.filter((x) => ["confirmed", "corrected", "unverifiable"].includes((av[x.key] || {}).status)).length;
+  return Math.round((done / relevant.length) * 100);
+}
+
+function renderAssetList() {
+  const q = $("asset-search").value;
+  const list = searchAssets(catalog.assets, q, {
+    pendingOnly: $("pending-only").checked,
+    tagsByAsset: catalogTags(),
+  });
+  $("asset-list").innerHTML = list.slice(0, 50).map((a) => {
+    const tags = (catalogTags()[a.id] || []).join(", ");
+    return `<li><button class="of-btn" data-asset="${a.id}" style="text-align:left; width:100%">
+      <strong>${a.name}</strong> ${tags ? `· <code>${tags}</code>` : ""}
+      ${statusBadge(a.status)} ${verificationBadge(a.verification_status)}
+      <span class="of-status">${assetProgress(a)}% verificado</span>
+    </button></li>`;
+  }).join("") || `<li class="of-status">Sin resultados.</li>`;
+}
+
+async function refreshCatalog() {
+  try {
+    catalog = await loadCatalog({ baseUrl: BASE_URL, store, tenantId: TENANT_ID });
+  } catch (e) {
+    log("catálogo: " + e.message);
+  }
+  renderCatalogInfo();
+  renderAssetList();
+}
+
+// --- Sesiones por activo ---
+
+async function closeSessionIfOpen() {
+  if (!session) return;
+  const ended = endSession(session);
+  await queue.enqueue({ kind: "session-end", session_id: ended.id, ended_at: ended.ended_at });
+  session = null;
+  log("sesión cerrada y encolada");
+}
+
+async function openAssetSession(asset) {
+  if (session && session.asset_id !== asset.id) await closeSessionIfOpen();
+  if (!session) {
+    session = await startSession(
+      { deviceId, assetId: asset.id, operator: $("operator").value || "operador" },
+      hw,
+    );
+    await queue.enqueue({ kind: "doc", entity: "device", doc: createDevice(deviceId, hw) });
+    await queue.enqueue({ kind: "doc", entity: "session", doc: session });
+    log("sesión iniciada: " + session.id + " → " + asset.name);
+  }
+}
+
+async function selectAsset(asset) {
+  currentAsset = asset;
+  $("asset-picker").hidden = true;
+  $("asset-panel").hidden = false;
+  $("asset-title").innerHTML = `${asset.name} ${statusBadge(asset.status)} ${verificationBadge(asset.verification_status)}`;
+  await openAssetSession(asset);
+  showTab("verify");
+  await renderQueue();
+}
+
+function showTab(which) {
+  $("verify-panel").hidden = which !== "verify";
+  $("capture-panel").hidden = which !== "capture";
+  $("tab-verify").className = "of-btn" + (which === "verify" ? " primary" : "");
+  $("tab-capture").className = "of-btn" + (which === "capture" ? " primary" : "");
+  if (which === "verify") renderVerifyForm();
+  if (which === "capture") ensureCamera();
+}
+
+// --- Verificación de ficha ---
+
+const pendingResults = new Map(); // key -> {action, value?}
+
+function renderVerifyForm() {
+  if (!currentAsset) return;
+  pendingResults.clear();
+  const type = catalog.types.find((t) => t.id === currentAsset.asset_type_id);
+  const attrs = type ? relevantAttrs(type) : [];
+  const av = currentAsset.attribute_verification || {};
+  const values = currentAsset.attributes || {};
+  $("verify-form").innerHTML = attrs.map((a) => {
+    const v = values[a.key];
+    const badge = attrVerificationBadge((av[a.key] || {}).status || "pending");
+    const unit = a.unit ? ` <span class="of-status">(${a.unit})</span>` : "";
+    const valueTxt = v !== null && v !== undefined ? `<code>${String(v)}</code>` : `<span class="of-status">sin valor</span>`;
+    const input = a.type === "boolean"
+      ? `<select data-attr="${a.key}" class="va-input"><option value=""></option><option value="si">Sí</option><option value="no">No</option></select>`
+      : a.type === "select"
+        ? `<select data-attr="${a.key}" class="va-input"><option value=""></option>${(a.options || []).map((o) => `<option>${o}</option>`).join("")}</select>`
+        : `<input data-attr="${a.key}" class="va-input" type="text"${a.type === "number" ? ' inputmode="decimal"' : ""}${a.type === "date" ? ' placeholder="AAAA-MM-DD"' : ""} maxlength="2000" hidden>`;
+    return `<div class="of-field" style="border-bottom:1px solid var(--of-border,#444); padding-bottom:0.5rem;">
+      <label><strong>${a.label || a.key}</strong>${unit} ${badge} — ${valueTxt}</label>
+      <div class="of-actions">
+        <button class="of-btn va-confirm" data-attr="${a.key}" ${v === null || v === undefined ? "disabled" : ""}>✓ Confirmar</button>
+        <button class="of-btn va-correct" data-attr="${a.key}">✎ ${v === null || v === undefined ? "Completar" : "Corregir"}</button>
+        <button class="of-btn va-unver" data-attr="${a.key}">? No verificable</button>
+        ${input}
+      </div>
+    </div>`;
+  }).join("") || `<p class="of-status">El tipo de este activo no define atributos verificables.</p>`;
+  updateVerifyProgress();
+}
+
+function updateVerifyProgress() {
+  const pct = currentAsset ? assetProgress(currentAsset) : 0;
+  $("verify-progress").value = pct;
+  $("verify-progress-text").textContent = `${pct}% de atributos verificados`;
+}
+
+async function saveVerification() {
+  if (!currentAsset) return;
+  const assetNotFound = $("asset-not-found").checked;
+  const results = [...pendingResults.entries()].map(([key, r]) => ({ key, ...r }));
+  if (!assetNotFound && !results.length && !$("verify-note").value.trim()) {
+    setStatus("⚠️ Nada que guardar: confirma, corrige o marca atributos primero.", "warn");
+    return;
+  }
+  // Validar correcciones con parseValue antes de encolar.
+  const type = catalog.types.find((t) => t.id === currentAsset.asset_type_id);
+  const defs = Object.fromEntries((type?.attributes || []).map((a) => [a.key, a]));
+  try {
+    for (const r of results) {
+      if (r.action === "correct" && defs[r.key]) r.value = parseValue(defs[r.key], r.value);
+    }
+  } catch (e) {
+    setStatus("❌ " + e.message, "danger");
+    return;
+  }
+  const qid = newId("op");
+  const payload = buildVerifyPayload({
+    opId: qid,
+    sessionId: session?.id || null,
+    results,
+    assetNotFound,
+    note: $("verify-note").value.trim() || null,
+  });
+  await queue.enqueue({ kind: "verify", asset_id: currentAsset.id, payload });
+  try {
+    applyVerificationLocally(currentAsset, type, payload);
+    await store.put("kv", { key: "catalog.assets", value: catalog.assets });
+  } catch (e) {
+    log("verificación local: " + e.message);
+  }
+  $("asset-not-found").checked = false;
+  $("verify-note").value = "";
+  setStatus("✅ Verificación encolada; se enviará al sincronizar.", "ok");
+  log("verificación encolada: " + currentAsset.id);
+  renderVerifyForm();
+  await renderQueue();
+}
+
+// --- Cámaras ---
+
+async function fillCameraList() {
+  try {
+    const cams = await hw.listCameras();
+    const saved = localStorage.getItem("of.cameraId");
+    $("camera").innerHTML = cams.map((c) =>
+      `<option value="${c.deviceId}"${c.deviceId === saved ? " selected" : ""}>${c.label}</option>`,
+    ).join("") || `<option value="">(sin cámaras detectadas)</option>`;
+  } catch (e) {
+    log("listCameras: " + e.message);
+  }
+}
+
+async function openSelectedCamera() {
+  try {
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    const deviceId = $("camera").value || localStorage.getItem("of.cameraId");
+    const out = await hw.openCamera({ deviceId: deviceId || null });
+    stream = out.stream;
+    $("preview").srcObject = stream;
+    const s = out.settings || {};
+    $("camera-info").textContent = `${out.label || "cámara"}${s.width ? ` · ${s.width}×${s.height}` : ""}`;
+  } catch (e) {
+    setStatus("❌ " + friendlyError(e), "danger");
+    log("cámara no disponible: " + e.message);
+  }
+}
+
+let cameraReady = false;
+async function ensureCamera() {
+  if (cameraReady) return;
+  cameraReady = true;
+  // Primero permiso (openCamera) para que enumerateDevices dé etiquetas (ADR-0023).
+  await openSelectedCamera();
+  await fillCameraList();
+  // Reabrir con el deviceId guardado si difiere del obtenido por defecto.
+  const saved = localStorage.getItem("of.cameraId");
+  if (saved && $("camera").value !== saved) await openSelectedCamera();
+}
+
+// --- Foto ---
+
+async function takePhoto() {
+  try {
+    const img = await hw.captureImage($("preview"));
+    const loc = await hw.getLocation();
+    const geom = (loc && loc.lon != null)
+      ? { type: "Point", coordinates: [loc.lon, loc.lat] }
+      : (currentAsset?.location || null);
+    const doc = await captureImage(
+      { sessionId: session.id, assetId: currentAsset.id, href: img.href, geometry: geom },
+      hw,
+    );
+    await queue.enqueue({ kind: "media", doc, blob: await blobToStored(img.blob) });
+    const acc = loc?.accuracy != null ? Math.round(loc.accuracy) : null;
+    setStatus(acc && acc > 100 ? "⚠️ Ubicación aproximada; activa 'Ubicación precisa' en Ajustes." : "✅ Foto encolada.", acc && acc > 100 ? "warn" : "ok");
+    log("foto encolada: " + doc.id + (loc ? ` (GPS${acc ? " ±" + acc + " m" : ""})` : " (ubicación del activo)"));
+    await renderQueue();
+  } catch (e) {
+    setStatus("❌ " + friendlyError(e), "danger");
+    log("error al capturar: " + e.message);
+  }
+}
+
+// --- Nota de voz iniciar/detener (ADR-0023) ---
+
+let recInterval = null;
+function fmtMs(ms) {
+  const s = Math.floor(ms / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
+
+async function toggleRecording() {
+  const btn = $("rec-toggle");
+  if (!recording) {
+    try {
+      const maxMs = Math.min(Math.max(parseInt($("rec-max").value, 10) || 5, 1), 30) * 60000;
+      recording = await hw.startAudioRecording({
+        maxMs,
+        onTick: (ms) => { $("rec-timer").textContent = fmtMs(ms); },
+      });
+      btn.textContent = "■ Detener";
+      btn.className = "of-btn danger";
+      $("indicator").parentElement.classList.add("live");
+      setStatus("🔴 Grabando nota de voz…", "warn");
+    } catch (e) {
+      setStatus("❌ " + friendlyError(e), "danger");
+      log("audio: " + e.message);
+    }
+    return;
+  }
+  const out = await recording.stop();
+  recording = null;
+  btn.textContent = "● Grabar nota de voz";
+  btn.className = "of-btn";
+  $("indicator").parentElement.classList.remove("live");
+  $("rec-timer").textContent = "";
+  pendingAudio = out;
+  if (out.autoStopped) setStatus("⏱️ Se alcanzó el tope de grabación.", "warn");
+  log(`audio grabado: ${fmtMs(out.durationMs)} (${out.mimeType})`);
+
+  if (navigator.onLine) {
+    try {
+      setStatus("⏳ Transcribiendo…");
+      const res = await transcribeAudio(out.blob, BASE_URL, { language: "es" });
+      $("transcript-edit").value = res.text || "(sin transcripción)";
+      $("transcript-area").hidden = false;
+      setStatus("✅ Transcrito (motor " + (res.engine || "stub") + "). Revisa y guarda.", "ok");
+      return;
+    } catch (e) {
+      log("transcripción directa falló: " + e.message + " — se encola el audio");
+    }
+  }
+  await enqueueAudioItem(out);
+  setStatus("📥 Audio encolado; se transcribirá al sincronizar.", "ok");
+}
+
+async function enqueueAudioItem(out) {
+  await queue.enqueue({
+    kind: "audio",
+    session_id: session?.id || null,
+    asset_id: currentAsset?.id || null,
+    blob: await blobToStored(out.blob),
+    mimeType: out.mimeType,
+    durationMs: out.durationMs,
+    keepOriginal: $("keep-audio").checked,
+  });
+  pendingAudio = null;
+  await renderQueue();
+}
+
+async function saveTranscript() {
+  const text = $("transcript-edit").value.trim();
+  if (!text) return;
+  const doc = recordAudio({
+    sessionId: session?.id,
+    assetId: currentAsset?.id,
+    engine: "edited",
+    text,
+  });
+  await queue.enqueue({ kind: "doc", entity: "transcript", doc });
+  if ($("keep-audio").checked && pendingAudio) {
+    await queue.enqueue({
+      kind: "audio",
+      session_id: session?.id || null,
+      asset_id: currentAsset?.id || null,
+      blob: await blobToStored(pendingAudio.blob),
+      mimeType: pendingAudio.mimeType,
+      durationMs: pendingAudio.durationMs,
+      keepOriginal: true,
+      transcribed: true, // ya tiene transcript; solo guardar el audio
+    });
+  }
+  pendingAudio = null;
+  $("transcript-area").hidden = true;
+  $("transcript-edit").value = "";
+  setStatus("✅ Transcripción encolada.", "ok");
+  await renderQueue();
+}
+
+// --- Comentario de texto ---
+
+async function saveComment() {
+  const text = $("comment").value.trim();
+  if (!text) return;
+  const doc = recordNote({ sessionId: session?.id, assetId: currentAsset?.id, text });
+  await queue.enqueue({ kind: "doc", entity: "observation", doc });
+  $("comment").value = "";
+  setStatus("✅ Comentario encolado.", "ok");
+  log("comentario encolado: " + doc.id);
+  await renderQueue();
+}
+
+// --- QR ---
+
+async function scanQr() {
+  if (!("BarcodeDetector" in window)) return;
+  setStatus("Apunta la cámara al QR/TAG…");
+  await ensureCamera();
+  const detector = new BarcodeDetector({ formats: ["qr_code"] });
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    try {
+      const codes = await detector.detect($("preview"));
+      if (codes.length) {
+        const value = codes[0].rawValue;
+        log("QR detectado: " + value);
+        await resolveAndSelect(value);
+        return;
+      }
+    } catch { /* frame sin código */ }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  setStatus("⚠️ No se detectó ningún código en 30 s.", "warn");
+}
+
+async function resolveAndSelect(value) {
+  try {
+    const res = await fetch(`${BASE_URL}/resolve?value=${encodeURIComponent(value)}`);
+    if (res.ok) {
+      const [match] = await res.json();
+      if (match?.asset) { await selectAsset(match.asset); return; }
+    }
+  } catch { /* sin conexión: busca en el catálogo local */ }
+  const local = findAssetByTag(catalog.assets, catalog.identifiers, value);
+  if (local) { await selectAsset(local); return; }
+  setStatus(`⚠️ Ningún activo coincide con "${value}".`, "warn");
+}
+
+// --- Nuevo activo ---
+
+function renderNewAssetDialog() {
+  const types = catalog.types.filter((t) => t.active !== false);
+  $("na-type").innerHTML = types.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
+  $("na-status").innerHTML = Object.entries(STATUS_LABELS)
+    .filter(([k]) => k !== "decommissioned")
+    .map(([k, v]) => `<option value="${k}"${k === "in_service" ? " selected" : ""}>${v}</option>`).join("");
+  renderNaAttrs();
+}
+
+function renderNaAttrs() {
+  const type = catalog.types.find((t) => t.id === $("na-type").value);
+  const attrs = type ? relevantAttrs(type) : [];
+  $("na-attrs").innerHTML = attrs.map((a) =>
+    `<div class="of-field"><label for="na-${a.key}">${a.label || a.key}${a.unit ? ` (${a.unit})` : ""}</label>
+    <input id="na-${a.key}" type="text"${a.type === "number" ? ' inputmode="decimal"' : ""} maxlength="2000"></div>`,
+  ).join("");
+}
+
+async function saveNewAsset() {
+  const name = $("na-name").value.trim();
+  if (!name) { setStatus("❌ El nombre es obligatorio.", "danger"); return; }
+  const type = catalog.types.find((t) => t.id === $("na-type").value) || null;
+  const attrs = {};
+  const defs = Object.fromEntries((type?.attributes || []).map((a) => [a.key, a]));
+  try {
+    for (const el of $("na-attrs").querySelectorAll("input")) {
+      const key = el.id.replace(/^na-/, "");
+      const v = parseValue(defs[key], el.value);
+      if (v !== null) attrs[key] = v;
+    }
+  } catch (e) { setStatus("❌ " + e.message, "danger"); return; }
+  const loc = await hw.getLocation();
+  const { asset, identifier } = newFieldAsset({
+    tenantId: TENANT_ID,
+    id: newId("asset"),
+    identId: newId("ident"),
+    type,
+    name,
+    tag: $("na-tag").value.trim() || null,
+    attributes: attrs,
+    status: $("na-status").value,
+    sessionId: session?.id || null,
+    lon: loc?.lon ?? null,
+    lat: loc?.lat ?? null,
+  });
+  await queue.enqueue({ kind: "doc", entity: "asset", doc: asset });
+  if (identifier) await queue.enqueue({ kind: "doc", entity: "asset-identifier", doc: identifier });
+  catalog.assets.push(asset);
+  if (identifier) catalog.identifiers.push(identifier);
+  await store.put("kv", { key: "catalog.assets", value: catalog.assets });
+  $("new-asset-dialog").close();
+  setStatus("✅ Activo enrolado localmente; se enviará al sincronizar.", "ok");
+  log("activo enrolado: " + asset.id + " — " + name);
+  await selectAsset(asset);
+}
+
+// --- Sincronización ---
+
+async function syncItem(item) {
+  if (item.kind === "media") {
+    const blob = storedToBlob(item.blob);
+    const up = await uploadMedia(blob, item.doc.id + ".jpg", BASE_URL);
+    item.doc.assets.primary.href = up.href;
+    await ingest("media-item", item.doc, BASE_URL);
+  } else if (item.kind === "audio") {
+    const blob = storedToBlob(item.blob);
+    let mediaId = null;
+    if (item.keepOriginal) {
+      const up = await uploadMedia(blob, `audio-${item.qid}.webm`, BASE_URL);
+      const mediaDoc = {
+        schema_version: "1.0", tenant_id: TENANT_ID, id: newId("media"),
+        session_id: item.session_id, asset_id: item.asset_id, type: "audio",
+        captured_at: item.created_at || now(),
+        geometry: null,
+        assets: { primary: { href: up.href, media_type: item.mimeType || "audio/webm" } },
+        thermal_capture_id: null, transcript_id: null, created_at: now(),
+      };
+      await ingest("media-item", mediaDoc, BASE_URL);
+      mediaId = mediaDoc.id;
+    }
+    if (!item.transcribed) {
+      const res = await transcribeAudio(blob, BASE_URL, { language: "es" });
+      const tr = recordAudio({
+        sessionId: item.session_id, assetId: item.asset_id, mediaItemId: mediaId,
+        engine: res.engine || "stub", text: res.text || "(sin transcripción)",
+      });
+      await ingest("transcript", tr, BASE_URL);
+    }
+  } else if (item.kind === "verify") {
+    await postVerify(item.asset_id, item.payload, BASE_URL);
+  } else if (item.kind === "session-end") {
+    await endSessionRemote(item.session_id, item.ended_at, BASE_URL);
+  } else {
+    await ingest(item.entity, item.doc, BASE_URL);
+  }
+}
+
+async function syncAll() {
+  if (recording) { setStatus("⚠️ Detén la grabación antes de sincronizar.", "warn"); return; }
+  setStatus("⏳ Sincronizando…");
+  const res = await queue.flush(syncItem);
+  log(`sincronización: ${res.synced} ok, ${res.failed} fallidos`);
+  if (res.failed) {
+    setStatus(`⚠️ ${res.failed} elemento(s) no se pudieron sincronizar; quedan en la cola.`, "warn");
+  } else if (res.synced) {
+    setStatus("✅ Sincronización completa.", "ok");
+    await refreshCatalog();
+  } else {
+    setStatus("No había pendientes.", "");
+  }
+  await renderQueue();
+}
+
+// --- Eventos ---
 
 $("consent").addEventListener("change", () => {
   const on = $("consent").checked;
   $("indicator").parentElement.classList.toggle("live", on);
   $("indicator-badge").lastChild.textContent = on ? " Grabación: consentida" : " Grabación: inactiva";
-  $("start").disabled = !on;
   renderSteps();
 });
+$("operator").value = localStorage.getItem("of.operator") || "";
+$("operator").addEventListener("change", () => localStorage.setItem("of.operator", $("operator").value));
+$("keep-audio").checked = localStorage.getItem("of.keepAudio") === "1";
+$("keep-audio").addEventListener("change", () => localStorage.setItem("of.keepAudio", $("keep-audio").checked ? "1" : "0"));
+$("rec-max").value = localStorage.getItem("of.recMax") || "5";
+$("rec-max").addEventListener("change", () => localStorage.setItem("of.recMax", $("rec-max").value));
+
+$("asset-search").addEventListener("input", renderAssetList);
+$("pending-only").addEventListener("change", renderAssetList);
+$("asset-list").addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-asset]");
+  if (!btn) return;
+  const asset = catalog.assets.find((a) => a.id === btn.dataset.asset);
+  if (asset) await selectAsset(asset);
+});
+$("scan-qr").addEventListener("click", scanQr);
+$("new-asset").addEventListener("click", () => { renderNewAssetDialog(); $("new-asset-dialog").showModal(); });
+$("na-type").addEventListener("change", renderNaAttrs);
+$("na-cancel").addEventListener("click", () => $("new-asset-dialog").close());
+$("na-save").addEventListener("click", saveNewAsset);
+
+$("tab-verify").addEventListener("click", () => showTab("verify"));
+$("tab-capture").addEventListener("click", () => showTab("capture"));
+$("goto-plate").addEventListener("click", () => showTab("capture"));
+$("end-session").addEventListener("click", async () => {
+  await closeSessionIfOpen();
+  currentAsset = null;
+  if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; cameraReady = false; }
+  $("asset-panel").hidden = true;
+  $("asset-picker").hidden = false;
+  setStatus("Sesión terminada. Elige otro activo.", "");
+  await renderQueue();
+});
+
+$("verify-form").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-attr]");
+  if (!btn) return;
+  const key = btn.dataset.attr;
+  if (btn.classList.contains("va-confirm")) {
+    pendingResults.set(key, { action: "confirm" });
+    btn.classList.add("primary");
+    setStatus(`✓ ${key} se confirmará al guardar.`, "");
+  } else if (btn.classList.contains("va-unver")) {
+    pendingResults.set(key, { action: "unverifiable" });
+    btn.classList.add("primary");
+    setStatus(`? ${key} se marcará no verificable al guardar.`, "");
+  } else if (btn.classList.contains("va-correct")) {
+    const input = btn.parentElement.querySelector(`.va-input[data-attr="${key}"]`);
+    if (input) input.hidden = !input.hidden;
+    if (input && !input.hidden) input.focus();
+  }
+});
+$("verify-form").addEventListener("input", (e) => {
+  if (!e.target.classList.contains("va-input")) return;
+  const key = e.target.dataset.attr;
+  const v = e.target.value;
+  if (v === "" || v === null) pendingResults.delete(key);
+  else pendingResults.set(key, { action: "correct", value: v });
+});
+$("save-verify").addEventListener("click", saveVerification);
 
 $("camera").addEventListener("change", async () => {
-  if (!stream) return;
-  stream.getTracks().forEach((t) => t.stop());
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: $("camera").value } } });
-    $("preview").srcObject = stream;
-  } catch (e) {
-    setStatus("❌ " + friendlyError(e), "danger");
-    log("cámara no disponible: " + e.message);
-  }
+  localStorage.setItem("of.cameraId", $("camera").value);
+  await openSelectedCamera();
 });
-
-$("start").addEventListener("click", async () => {
-  session = await startSession({ deviceId, assetId: "asset-001" }, hw);
-  queue.push({ kind: "doc", entity: "device", doc: createDevice(deviceId, hw) });
-  queue.push({ kind: "doc", entity: "session", doc: session });
-  log("sesión iniciada: " + session.id);
-  updateQueueBadge();
-  try {
-    const res = await fetch(`${BASE_URL}/documents/asset-001`);
-    if (res.ok) assetLocation = (await res.json()).location || null;
-  } catch {}
-  try {
-    if (stream) stream.getTracks().forEach((t) => t.stop()); // libera cámara previa
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: $("camera").value } } });
-    $("preview").srcObject = stream;
-    $("capture").disabled = false;
-    $("audio").disabled = false;
-    $("sync").disabled = false;
-    setStatus("✅ Sesión lista. Captura una foto o nota de audio.", "ok");
-  } catch (e) {
-    setStatus("❌ " + friendlyError(e), "danger");
-    log("cámara no disponible: " + e.message + " (permite el acceso a la cámara)");
-  }
-  renderSteps();
+$("capture").addEventListener("click", takePhoto);
+$("rec-toggle").addEventListener("click", toggleRecording);
+$("save-transcript").addEventListener("click", saveTranscript);
+$("discard-transcript").addEventListener("click", () => {
+  pendingAudio = null;
+  $("transcript-area").hidden = true;
 });
+$("save-comment").addEventListener("click", saveComment);
+$("sync").addEventListener("click", syncAll);
 
-$("capture").addEventListener("click", async () => {
-  try {
-    const img = await hw.captureImage($("preview")); // reusa el stream del preview
-    const loc = await hw.getLocation();
-    const geom = (loc && loc.lon != null) ? { type: "Point", coordinates: [loc.lon, loc.lat] } : (assetLocation || null);
-    const doc = await captureImage({ sessionId: session.id, assetId: "asset-001", href: img.href, geometry: geom }, hw);
-    queue.push({ kind: "media", doc, blob: img.blob });
-    updateQueueBadge();
-    if (loc) {
-      const acc = loc.accuracy != null ? Math.round(loc.accuracy) : null;
-      log("foto capturada: " + doc.id + " (GPS" + (acc ? " ±" + acc + " m" : "") + ")");
-      setStatus(acc && acc > 100 ? "⚠️ Ubicación aproximada; activa 'Ubicación precisa' en Ajustes." : "✅ Foto capturada.", acc && acc > 100 ? "warn" : "ok");
-    } else {
-      setStatus("⚠️ Sin GPS: se usó la ubicación del activo. Permite ubicación precisa en Ajustes.", "warn");
-      log("foto capturada: " + doc.id + " (ubicación del activo)");
-    }
-  } catch (e) {
-    setStatus("❌ " + friendlyError(e), "danger");
-    log("error al capturar: " + e.message);
-  }
-});
+if (navigator.mediaDevices?.addEventListener) {
+  navigator.mediaDevices.addEventListener("devicechange", fillCameraList);
+}
+if ("BarcodeDetector" in window) $("scan-qr").hidden = false;
 
-$("audio").addEventListener("click", async () => {
-  const btn = $("audio");
-  btn.disabled = true;
-  try {
-    const secs = parseInt($("duration").value, 10) || 3;
-    setStatus("🔴 Grabando… (" + secs + " s) — habla", "warn");
-    const audio = await hw.recordAudio(secs * 1000); // graba y devuelve { blob }
-    setStatus("⏳ Transcribiendo…");
-    const result = await transcribeAudio(audio.blob, BASE_URL); // { text, engine }
-    const doc = recordAudio({ sessionId: session.id, assetId: "asset-001", engine: result.engine || "stub", text: result.text || "(sin transcripción)" });
-    queue.push({ kind: "doc", entity: "transcript", doc });
-    updateQueueBadge();
-    setStatus("✅ Transcrito (motor " + doc.engine + "): " + doc.text, "ok");
-    log("transcripción: " + doc.id + " (motor " + doc.engine + ")");
-  } catch (e) {
-    setStatus("❌ " + friendlyError(e), "danger");
-    log("error audio: " + e.message);
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-$("sync").addEventListener("click", async () => {
-  const items = queue.splice(0, queue.length);
-  let failed = 0;
-  for (const item of items) {
-    try {
-      if (item.kind === "media") {
-        const up = await uploadMedia(item.blob, item.doc.id + ".jpg", BASE_URL);
-        item.doc.assets.primary.href = up.href;
-        await ingest("media-item", item.doc, BASE_URL);
-      } else {
-        await ingest(item.entity, item.doc, BASE_URL);
-      }
-      log("ok: " + item.doc.id);
-    } catch (e) {
-      log("error: " + e.message);
-      queue.push(item); // reintentar luego (D4)
-      failed += 1;
-    }
-  }
-  syncedOnce = true;
-  updateQueueBadge();
-  if (failed) {
-    setStatus(`⚠️ ${failed} elemento(s) no se pudieron sincronizar; quedan en la cola para reintentar.`, "warn");
-  } else if (items.length) {
-    setStatus("✅ Sincronización completa.", "ok");
+// Sin Background Sync (ADR-0008): al volver a primer plano, solo se avisa.
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && navigator.onLine) {
+    const n = await queue.count();
+    if (n) setStatus(`Hay ${n} pendiente(s): pulsa Sincronizar.`, "warn");
   }
 });
 
 updateConnectionBadge();
 renderSteps();
-updateQueueBadge();
+renderQueue();
+refreshCatalog();
 </script>
 </body>
 </html>
