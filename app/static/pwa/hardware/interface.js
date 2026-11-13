@@ -8,7 +8,12 @@
 //
 // Métodos opcionales (ADR-0023), presentes en la implementación web y simulada:
 //   listCameras()            -> [{ deviceId, label, groupId }]
-//   openCamera({ deviceId, facingMode }) -> { stream, settings, label }
+//   openCamera({ deviceId, facingMode }) ->
+//       { stream, track, settings, label,
+//         capabilities: { torch: bool, zoom: {min,max,step}|null } }
+//   setTorch(camera, on)  -> Promise<bool>   (false si no hay soporte)
+//   setZoom(camera, value) -> Promise<bool>
+//   watchLocation(onFix)   -> stop(): detiene el watch; onFix({lon,lat,accuracy})
 //   startAudioRecording({ maxMs, onTick }) ->
 //       { stop(): Promise<{ blob, durationMs, mimeType, autoStopped }>, cancel() }
 //
@@ -16,7 +21,9 @@
 
 export const REQUIRED_METHODS = ["capabilities", "getLocation", "captureImage", "recordAudio"];
 
-export const OPTIONAL_METHODS = ["listCameras", "openCamera", "startAudioRecording"];
+export const OPTIONAL_METHODS = [
+  "listCameras", "openCamera", "setTorch", "setZoom", "watchLocation", "startAudioRecording",
+];
 
 export function assertHardware(impl) {
   for (const method of REQUIRED_METHODS) {

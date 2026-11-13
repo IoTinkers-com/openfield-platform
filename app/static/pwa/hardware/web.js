@@ -55,27 +55,87 @@ export function webHardware() {
     },
 
     async openCamera({ deviceId = null, facingMode = "environment" } = {}) {
-      const video = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: facingMode } };
+      // ADR-0024: se pide resolución alta como "ideal" (nunca falla por restricción).
+      const base = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+      const video = deviceId
+        ? { ...base, deviceId: { exact: deviceId } }
+        : { ...base, facingMode: { ideal: facingMode } };
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
       } catch (e) {
         // Si el deviceId exacto falla, reintenta por orientación.
         if (deviceId && (e.name === "OverconstrainedError" || e.name === "NotFoundError")) {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facingMode } }, audio: false });
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { ...base, facingMode: { ideal: facingMode } },
+            audio: false,
+          });
         } else {
           throw e;
         }
       }
       const track = stream.getVideoTracks()[0];
+      const settings = track?.getSettings ? track.getSettings() : {};
+      const caps = track?.getCapabilities ? track.getCapabilities() : {};
       return {
         stream,
-        settings: track?.getSettings ? track.getSettings() : {},
+        track,
+        settings,
         label: track?.label || "",
+        capabilities: {
+          torch: Boolean(caps.torch),
+          zoom: caps.zoom ? { min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step } : null,
+        },
       };
     },
 
-    async captureImage(videoEl) {
+    // Controles en runtime: solo si getCapabilities los expone (ADR-0024).
+    async setTorch(camera, on) {
+      const track = camera?.track;
+      if (!track?.applyConstraints || !camera?.capabilities?.torch) return false;
+      await track.applyConstraints({ advanced: [{ torch: Boolean(on) }] });
+      return true;
+    },
+
+    async setZoom(camera, value) {
+      const track = camera?.track;
+      if (!track?.applyConstraints || !camera?.capabilities?.zoom) return false;
+      await track.applyConstraints({ advanced: [{ zoom: Number(value) }] });
+      return true;
+    },
+
+    // GPS continuo mientras la cámara está abierta (ADR-0024): el disparo usa
+    // el último fix conocido en vez de esperar uno nuevo.
+    watchLocation(onFix) {
+      if (!("geolocation" in navigator) || typeof onFix !== "function") return () => {};
+      const id = navigator.geolocation.watchPosition(
+        (pos) => onFix({
+          lon: pos.coords.longitude,
+          lat: pos.coords.latitude,
+          accuracy: pos.coords.accuracy,
+        }),
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 5000 },
+      );
+      return () => navigator.geolocation.clearWatch(id);
+    },
+
+    async captureImage(videoEl, { track = null } = {}) {
+      // ADR-0024: ImageCapture.takePhoto() si está disponible (mejor resolución);
+      // respaldo al canvas del preview.
+      if (track && typeof ImageCapture !== "undefined") {
+        try {
+          const blob = await new ImageCapture(track).takePhoto();
+          const href = await dataUrlFromBlob(blob);
+          const bmp = typeof createImageBitmap === "function" ? await createImageBitmap(blob).catch(() => null) : null;
+          return {
+            href,
+            blob,
+            width: bmp?.width || videoEl?.videoWidth || 0,
+            height: bmp?.height || videoEl?.videoHeight || 0,
+          };
+        } catch (_) { /* cae al canvas */ }
+      }
       // Reusa el stream del preview (no abre una segunda cámara).
       if (!videoEl || !videoEl.videoWidth) throw new Error("cámara no iniciada");
       const canvas = document.createElement("canvas");
@@ -84,7 +144,7 @@ export function webHardware() {
       canvas.getContext("2d").drawImage(videoEl, 0, 0);
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
       const href = await dataUrlFromBlob(blob);
-      return { href, blob };
+      return { href, blob, width: canvas.width, height: canvas.height };
     },
 
     // --- Nota de voz iniciar/detener libre (ADR-0023) ---

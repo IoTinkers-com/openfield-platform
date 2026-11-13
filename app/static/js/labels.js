@@ -69,3 +69,26 @@ export const DATA_SOURCE_LABELS = {
   field: "Terreno",
   manual: "Manual",
 };
+
+// Categorías de foto predeterminadas (ADR-0024). Un tipo de activo puede
+// reemplazarlas por `photo_categories`; sin configuración se usa esta lista.
+export const DEFAULT_PHOTO_CATEGORIES = [
+  { key: "placa", label: "Placa de datos", active: true },
+  { key: "general", label: "Vista general", active: true },
+  { key: "detalle", label: "Detalle", active: true },
+  { key: "hallazgo", label: "Hallazgo/anomalía", active: true },
+  { key: "entorno", label: "Entorno/ubicación", active: true },
+];
+
+// Categorías activas de un tipo de activo (o las predeterminadas).
+export function photoCategoriesFor(typeDoc) {
+  const cats = (typeDoc?.photo_categories || []).filter((c) => c.active !== false);
+  return cats.length ? cats : DEFAULT_PHOTO_CATEGORIES;
+}
+
+export function photoCategoryLabel(typeDoc, key) {
+  if (!key) return "";
+  const custom = (typeDoc?.photo_categories || []).find((c) => c.key === key);
+  if (custom) return custom.label;
+  return DEFAULT_PHOTO_CATEGORIES.find((c) => c.key === key)?.label || key;
+}

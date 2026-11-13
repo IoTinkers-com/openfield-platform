@@ -49,6 +49,7 @@
 
   <section id="media-section" class="of-card" style="display:none">
     <h2 class="of-section-title">Medios</h2>
+    <div id="media-filters" class="of-chips" style="margin-bottom:var(--of-space-3)"></div>
     <div id="media" class="of-gallery"></div>
   </section>
 
@@ -88,11 +89,14 @@ import {
   emptyState, escapeHtml, formatDate, mediaCard,
   apiPatch, apiGetDoc, searchAssetsApi, itemActions,
 } from "/static/js/dossier-common.js?v=c3";
-import { statusBadge, verificationBadge, attrVerificationBadge, DATA_SOURCE_LABELS } from "/static/js/labels.js";
+import { statusBadge, verificationBadge, attrVerificationBadge, DATA_SOURCE_LABELS, photoCategoriesFor } from "/static/js/labels.js?v=c3";
 
 const $ = (id) => document.getElementById(id);
 const assetId = location.pathname.replace(/\/$/, "").split("/").pop();
 let showDeleted = false;
+let _assetType = null;
+let _mediaCategory = "";
+let _mediaItems = [];
 
 function show(id) { $(id).style.display = ''; }
 
@@ -204,65 +208,127 @@ function renderSessions(sessions) {
 
 // --- Edición en línea (ADR-0021) ---
 
-let _moveDialog = null;
+let _editMediaDialog = null;
 
-function moveMediaDialog(mediaItem) {
-  if (!_moveDialog) {
-    _moveDialog = document.createElement('dialog');
-    _moveDialog.className = 'of-card';
-    _moveDialog.style.maxWidth = '30rem';
-    _moveDialog.innerHTML = `
-      <h3 class="of-section-title">Mover a otro activo</h3>
+function editMediaDialog(mediaItem) {
+  if (!_editMediaDialog) {
+    _editMediaDialog = document.createElement('dialog');
+    _editMediaDialog.className = 'of-card';
+    _editMediaDialog.style.maxWidth = '30rem';
+    _editMediaDialog.innerHTML = `
+      <h3 class="of-section-title">Editar medio</h3>
+      <div class="of-field"><label>Leyenda</label><textarea maxlength="500" rows="2" data-caption></textarea></div>
+      <div class="of-field"><label>Categoría</label><select data-category></select></div>
+      <h4 class="of-section-title" style="margin-top:var(--of-space-3)">Mover a otro activo</h4>
       <div class="of-field"><input type="search" placeholder="Buscar activo" maxlength="100" data-q></div>
-      <div class="of-field"><select data-target size="6" style="width:100%"></select></div>
+      <div class="of-field"><select data-target size="5" style="width:100%"></select></div>
       <div class="of-actions">
-        <button class="of-btn primary" data-save>Mover</button>
+        <button class="of-btn primary" data-save>Guardar</button>
         <button class="of-btn" data-close>Cancelar</button>
       </div>`;
-    _moveDialog.querySelector('[data-close]').addEventListener('click', () => _moveDialog.close());
-    _moveDialog.querySelector('[data-q]').addEventListener('input', async (e) => {
+    const dlg = _editMediaDialog;
+    dlg.querySelector('[data-close]').addEventListener('click', () => dlg.close());
+    dlg.querySelector('[data-q]').addEventListener('input', async (e) => {
       const assets = await searchAssetsApi(e.target.value);
-      _moveDialog.querySelector('[data-target]').innerHTML = assets
-        .filter((a) => a.status !== 'decommissioned')
-        .map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name || a.id)} (${escapeHtml(a.id)})</option>`)
-        .join('');
+      const current = dlg.dataset.currentAsset || '';
+      const opts = ['<option value="">— sin cambio —</option>'].concat(
+        assets
+          .filter((a) => a.status !== 'decommissioned' && a.id !== current)
+          .map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name || a.id)} (${escapeHtml(a.id)})</option>`),
+      );
+      dlg.querySelector('[data-target]').innerHTML = opts.join('');
     });
-    document.body.appendChild(_moveDialog);
+    document.body.appendChild(dlg);
   }
-  const q = _moveDialog.querySelector('[data-q]');
+  const dlg = _editMediaDialog;
+  const md = mediaItem.metadata || {};
+  dlg.dataset.currentAsset = mediaItem.asset_id || '';
+  dlg.querySelector('[data-caption]').value = md.caption || '';
+  const cats = photoCategoriesFor(_assetType);
+  const sel = dlg.querySelector('[data-category]');
+  const opts = ['<option value="">— sin categoría —</option>']
+    .concat(cats.map((c) => `<option value="${escapeHtml(c.key)}">${escapeHtml(c.label)}</option>`));
+  if (md.category && !cats.some((c) => c.key === md.category)) {
+    opts.push(`<option value="${escapeHtml(md.category)}">${escapeHtml(md.category_label || md.category)}</option>`);
+  }
+  sel.innerHTML = opts.join('');
+  sel.value = md.category || '';
+  const q = dlg.querySelector('[data-q]');
   q.value = '';
   q.dispatchEvent(new Event('input'));
-  _moveDialog.querySelector('[data-save]').onclick = async () => {
-    const target = _moveDialog.querySelector('[data-target]').value;
-    if (!target) return;
+  dlg.querySelector('[data-save]').onclick = async () => {
+    const caption = dlg.querySelector('[data-caption]').value.trim();
+    const category = sel.value || '';
+    const target = dlg.querySelector('[data-target]').value;
+    const meta = { ...(mediaItem.metadata || {}) };
+    if (caption) meta.caption = caption.slice(0, 500); else delete meta.caption;
+    if (category) {
+      meta.category = category;
+      meta.category_label = sel.selectedOptions[0]?.textContent || category;
+    } else {
+      delete meta.category;
+      delete meta.category_label;
+    }
+    const changes = { metadata: meta };
+    if (target && target !== mediaItem.asset_id) changes.asset_id = target;
     try {
-      await apiPatch(mediaItem.id, { asset_id: target }, 'reasignación desde expediente');
-      _moveDialog.close();
+      await apiPatch(mediaItem.id, changes, 'edición desde expediente');
+      dlg.close();
       load();
-    } catch (e) { alert('No se pudo mover: ' + e.message); }
+    } catch (e) { alert('No se pudo guardar: ' + e.message); }
   };
-  _moveDialog.showModal();
+  dlg.showModal();
+}
+
+function renderMediaFilters() {
+  const box = $('media-filters');
+  const cats = [...new Set(_mediaItems.map((m) => (m.metadata || {}).category).filter(Boolean))];
+  if (!cats.length) { box.innerHTML = ''; return; }
+  const chip = (key, label) =>
+    `<button type="button" class="of-chip ${_mediaCategory === key ? 'active' : ''}" data-cat="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
+  box.innerHTML = chip('', 'Todas') + cats
+    .map((k) => {
+      const labels = new Set(_mediaItems.filter((m) => (m.metadata || {}).category === k).map((m) => (m.metadata || {}).category_label || k));
+      return chip(k, [...labels].join('/'));
+    })
+    .join('');
+  box.querySelectorAll('[data-cat]').forEach((b) =>
+    b.addEventListener('click', () => { _mediaCategory = b.dataset.cat; renderMediaCards(); }),
+  );
 }
 
 function renderMedia(mediaItems) {
+  _mediaItems = mediaItems;
+  _mediaCategory = '';
   if (!mediaItems.length) {
     show('media-section');
+    $('media-filters').innerHTML = '';
     emptyState($('media'), { icon: '📷', title: 'Sin medios capturados para este activo.' });
     return;
   }
   show('media-section');
+  renderMediaFilters();
+  renderMediaCards();
+}
+
+function renderMediaCards() {
+  renderMediaFilters();
   const container = $('media');
   container.innerHTML = '';
-  for (const m of mediaItems) {
+  const items = _mediaCategory
+    ? _mediaItems.filter((m) => (m.metadata || {}).category === _mediaCategory)
+    : _mediaItems;
+  for (const m of items) {
     const wrap = document.createElement('div');
     if (m._deleted_at) wrap.className = 'of-deleted';
     wrap.appendChild(mediaCard(m));
     wrap.appendChild(itemActions({
       id: m.id, kind: 'medio', deleted: Boolean(m._deleted_at),
-      onEdit: () => moveMediaDialog(m), onChanged: load,
+      onEdit: () => editMediaDialog(m), onChanged: load,
     }));
     container.appendChild(wrap);
   }
+  if (!items.length) emptyState(container, { icon: '📷', title: 'Sin medios de esta categoría.' });
 }
 
 function renderObservations(observations) {
@@ -445,6 +511,7 @@ async function load() {
     const res = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!res.ok) throw new Error(res.status === 404 ? 'Activo no encontrado' : `Error ${res.status}`);
     const dossier = await res.json();
+    _assetType = dossier.asset_type || null;
     renderAssetSummary(dossier.asset, dossier.identifiers);
     renderDatasheet(dossier.asset, dossier.asset_type, dossier.parent || null, dossier.children || []);
     renderIdentifiers(dossier.identifiers);

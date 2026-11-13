@@ -55,11 +55,27 @@ export function endSession(session) {
   return { ...session, ended_at: now() };
 }
 
-export async function captureImage({ sessionId, assetId, href, geometry, seq = 1 } = {}, hw = simulatedHardware()) {
+// Metadatos de foto de la pantalla de confirmación (ADR-0024). Se truncan a los
+// límites del esquema y las claves ausentes no se emiten.
+const _PHOTO_META_LIMITS = { caption: 500, category: 50, category_label: 100, camera_label: 200 };
+
+export function photoMetadata({ caption, category, categoryLabel, cameraLabel, width, height } = {}) {
+  const m = {};
+  const put = (k, v, max) => { if (v) m[k] = String(v).slice(0, max); };
+  put("caption", caption, _PHOTO_META_LIMITS.caption);
+  put("category", category, _PHOTO_META_LIMITS.category);
+  put("category_label", categoryLabel, _PHOTO_META_LIMITS.category_label);
+  put("camera_label", cameraLabel, _PHOTO_META_LIMITS.camera_label);
+  if (Number.isFinite(width)) m.width = Math.trunc(width);
+  if (Number.isFinite(height)) m.height = Math.trunc(height);
+  return m;
+}
+
+export async function captureImage({ sessionId, assetId, href, geometry, seq = 1, metadata } = {}, hw = simulatedHardware()) {
   const img = href ? { href } : hw.captureImage(seq); // { href, blob? }
   // `geometry` es GeoJSON ya listo; si no viene, se deriva del {lon,lat} del hardware.
   const geom = geometry !== undefined ? geometry : toPoint(await hw.getLocation());
-  return {
+  const doc = {
     schema_version: SCHEMA_VERSION,
     tenant_id: TENANT_ID,
     id: newId("media"),
@@ -73,6 +89,8 @@ export async function captureImage({ sessionId, assetId, href, geometry, seq = 1
     transcript_id: null,
     created_at: now(),
   };
+  if (metadata && Object.keys(metadata).length) doc.metadata = metadata;
+  return doc;
 }
 
 export function recordAudio({ sessionId, assetId, mediaItemId = null, engine = "simulated", text = "(transcripción pendiente)", language = "es" } = {}) {

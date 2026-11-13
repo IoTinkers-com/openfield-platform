@@ -31,6 +31,21 @@
         }
       }
     },
+    "photo_categories": {
+      "type": ["array", "null"],
+      "description": "Categorías de foto para la captura en terreno (ADR-0024). Si falta o está vacía, la PWA usa la lista predeterminada.",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "required": ["key", "label"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,49}$" },
+          "label": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "active": { "type": "boolean", "default": true }
+        }
+      }
+    },
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": ["string", "null"], "format": "date-time" }
   }

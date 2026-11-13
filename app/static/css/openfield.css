@@ -216,6 +216,9 @@ a { color: var(--of-primary); }
 .of-media-card .of-media-placeholder { height: 110px; background: var(--of-bg); display: flex; align-items: center; justify-content: center; color: var(--of-text-muted); font-size: 0.75rem; }
 .of-media-card .of-media-meta { padding: var(--of-space-2); font-size: 0.72rem; color: var(--of-text-muted); }
 .of-media-card .of-media-id { word-break: break-all; }
+.of-media-card .of-media-caption { margin-top: var(--of-space-1); color: var(--of-text); font-size: 0.75rem; }
+.of-chip { padding: 0.3rem 0.7rem; border: 1px solid var(--of-border); border-radius: 999px; background: var(--of-surface); color: var(--of-text); font-size: 0.8rem; cursor: pointer; font-family: inherit; }
+.of-chip.active { background: var(--of-primary); border-color: var(--of-primary); color: #fff; }
 
 /* Agrupación por activo */
 .of-asset-group { margin-bottom: var(--of-space-4); }
@@ -250,6 +253,68 @@ a { color: var(--of-primary); }
 .of-capture-video { width: 100%; max-width: 480px; border-radius: var(--of-radius); background: #000; display: block; }
 .of-actions { display: flex; flex-wrap: wrap; gap: var(--of-space-2); margin: var(--of-space-3) 0; align-items: center; }
 .of-consent-row { display: flex; align-items: center; gap: var(--of-space-2); flex-wrap: wrap; }
+
+/* Captura por pantallas: una pantalla por paso (ADR-0024) */
+[data-screen][hidden] { display: none !important; }
+
+/* Cámara a pantalla completa (overlay CSS; iOS no soporta Fullscreen API) */
+.of-cam {
+  position: fixed; inset: 0; z-index: 60; background: #000;
+  display: flex; flex-direction: column;
+}
+.of-cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.of-cam-top {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--of-space-2);
+  padding: calc(env(safe-area-inset-top, 0px) + 0.5rem) 0.75rem 0.5rem;
+  background: linear-gradient(rgba(0,0,0,.55), transparent); color: #fff;
+}
+.of-cam-title { text-align: center; min-width: 0; }
+.of-cam-title strong { display: block; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.of-cam-info { display: block; font-size: 0.72rem; color: #cfd4dd; }
+.of-cam-btn {
+  min-width: 44px; min-height: 44px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.45); color: #fff;
+  font-size: 1.1rem; cursor: pointer; font-family: inherit;
+}
+.of-cam-btn.on { background: var(--of-primary); border-color: var(--of-primary); }
+.of-cam-zoom {
+  position: absolute; left: 12px; right: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  background: rgba(0,0,0,.35); border-radius: 999px; padding: 0 0.5rem;
+}
+.of-cam-zoom input { width: 100%; }
+.of-cam-bottom {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: space-around;
+  padding: 0.75rem 0.75rem calc(env(safe-area-inset-bottom, 0px) + 1rem);
+  background: linear-gradient(transparent, rgba(0,0,0,.55));
+}
+.of-cam-shutter {
+  width: 72px; height: 72px; border-radius: 50%;
+  border: 4px solid #fff; background: rgba(255,255,255,.25); cursor: pointer;
+}
+.of-cam-shutter:active { background: rgba(255,255,255,.6); }
+.of-cam-thumb {
+  width: 52px; height: 52px; border-radius: 8px; border: 2px solid #fff;
+  background: #222 center/cover no-repeat; cursor: pointer; position: relative;
+}
+.of-cam-thumb[data-count]:not([data-count="0"])::after {
+  content: attr(data-count); position: absolute; top: -8px; right: -8px;
+  background: var(--of-primary); color: #fff; border-radius: 999px;
+  font-size: 0.7rem; padding: 0.1rem 0.4rem;
+}
+.of-cam-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; transition: opacity .12s; }
+.of-cam-flash.on { opacity: .85; }
+.of-cam #cam-done { position: absolute; right: 0.75rem; top: calc(env(safe-area-inset-top, 0px) + 60px); }
+
+/* Confirmación de foto */
+.of-conf { position: fixed; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column; }
+.of-conf > img { flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain; }
+.of-conf-panel {
+  background: var(--of-surface); color: var(--of-text);
+  padding: var(--of-space-3) var(--of-space-3) calc(env(safe-area-inset-bottom, 0px) + var(--of-space-3));
+}
 
 /* Pestañas (panel de administración) */
 .of-tabs { display: flex; gap: var(--of-space-2); flex-wrap: wrap; margin-bottom: var(--of-space-4); border-bottom: 1px solid var(--of-border); }

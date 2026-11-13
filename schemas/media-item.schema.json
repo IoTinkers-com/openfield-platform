@@ -49,7 +49,18 @@
     },
     "thermal_capture_id": { "type": ["string", "null"], "description": "Vínculo al ThermalCapture si type=thermal." },
     "transcript_id": { "type": ["string", "null"], "description": "Vínculo al Transcript si type=audio." },
-    "metadata": { "type": "object", "description": "Metadatos libres (fabricante, cámara, etc.)." },
+    "metadata": {
+      "type": "object",
+      "description": "Metadatos libres (fabricante, cámara, etc.). Se reconocen claves con límites (ADR-0024); se admiten otras claves.",
+      "properties": {
+        "caption": { "type": ["string", "null"], "maxLength": 500, "description": "Leyenda opcional escrita en la pantalla de confirmación." },
+        "category": { "type": ["string", "null"], "maxLength": 50, "description": "Clave de la categoría de foto elegida." },
+        "category_label": { "type": ["string", "null"], "maxLength": 100, "description": "Nombre de la categoría al momento de capturar (para mostrar aunque cambie la configuración)." },
+        "camera_label": { "type": ["string", "null"], "maxLength": 200, "description": "Etiqueta de la cámara usada." },
+        "width": { "type": ["integer", "null"], "minimum": 0 },
+        "height": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
     "created_at": { "type": "string", "format": "date-time" }
   }
 }

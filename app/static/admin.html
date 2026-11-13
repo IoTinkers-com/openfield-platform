@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/static/css/openfield.css">
 <style>
   #attr-rows { max-height: 340px; overflow-y: auto; }
+  .of-cat-row { display: grid; grid-template-columns: 1fr 2fr auto 32px; gap: var(--of-space-2); align-items: center; margin-bottom: var(--of-space-2); }
   .of-admin-grid { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: var(--of-space-4); }
   @media (max-width: 800px) { .of-admin-grid { grid-template-columns: 1fr; } }
 </style>
@@ -108,6 +109,18 @@
           <div id="attr-rows"></div>
           <div class="of-actions">
             <button type="button" id="add-attr-btn" class="of-btn">+ Agregar atributo</button>
+          </div>
+          <h3 class="of-section-title" style="margin-top:var(--of-space-4)">Categorías de foto</h3>
+          <p class="of-progress-legend">Etiquetas de un toque al confirmar cada foto en la captura. Vacío = lista predeterminada.</p>
+          <div class="of-cat-row" style="font-weight:700">
+            <span>Clave</span><span>Etiqueta</span><span>Activa</span><span></span>
+          </div>
+          <div id="cat-rows"></div>
+          <div class="of-actions">
+            <button type="button" id="add-cat-btn" class="of-btn">+ Agregar categoría</button>
+            <button type="button" id="default-cat-btn" class="of-btn">Usar predeterminadas</button>
+          </div>
+          <div class="of-actions">
             <button type="submit" class="of-btn primary">Guardar tipo</button>
           </div>
           <p id="types-msg" class="of-status"></p>

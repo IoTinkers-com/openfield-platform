@@ -63,7 +63,14 @@ export function mediaCard(media) {
   }
   const meta = document.createElement("div");
   meta.className = "of-media-meta";
-  meta.innerHTML = `<div class="of-media-id">${escapeHtml(media.id)}</div><div>${formatDate(media.captured_at)}</div>`;
+  const m = media.metadata || {};
+  const caption = m.caption
+    ? `<div class="of-media-caption">${escapeHtml(m.caption)}</div>`
+    : "";
+  const cat = m.category
+    ? `<span class="of-badge">${escapeHtml(m.category_label || m.category)}</span>`
+    : "";
+  meta.innerHTML = `<div class="of-media-id">${escapeHtml(media.id)}</div><div>${formatDate(media.captured_at)}</div>${cat}${caption}`;
   card.appendChild(meta);
   return card;
 }

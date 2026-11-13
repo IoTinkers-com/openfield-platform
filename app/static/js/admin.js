@@ -4,6 +4,7 @@ import {
   VERIFICATION_LABELS,
   ATTR_VERIFICATION_LABELS,
   DATA_SOURCE_LABELS,
+  DEFAULT_PHOTO_CATEGORIES,
   statusBadge,
   verificationBadge,
   attrVerificationBadge,
@@ -174,6 +175,40 @@ function readAttrRows() {
   });
 }
 
+// ---- Editor de categorías de foto (ADR-0024) -------------------------------
+
+function catRow(c = {}) {
+  const tr = document.createElement("div");
+  tr.className = "of-cat-row";
+  tr.innerHTML = `
+    <input data-f="key" maxlength="50" pattern="[a-z][a-z0-9_]*" placeholder="clave" value="${escapeHtml(c.key || "")}">
+    <input data-f="label" maxlength="100" placeholder="Etiqueta" value="${escapeHtml(c.label || "")}">
+    <label class="of-attr-flag"><input data-f="active" type="checkbox" ${c.active !== false ? "checked" : ""}> act</label>
+    <button type="button" data-act="del" class="of-btn" title="Quitar">✕</button>`;
+  tr.querySelector('[data-act="del"]').addEventListener("click", () => tr.remove());
+  return tr;
+}
+
+function readCatRows() {
+  return [...$("cat-rows").querySelectorAll(".of-cat-row")]
+    .map((tr) => ({
+      key: tr.querySelector('[data-f="key"]').value.trim(),
+      label: tr.querySelector('[data-f="label"]').value.trim(),
+      active: tr.querySelector('[data-f="active"]').checked,
+    }))
+    .filter((c) => c.key)
+    .map((c) => ({ ...c, label: c.label || c.key }));
+}
+
+function fillCatRows(cats) {
+  const rows = $("cat-rows");
+  rows.innerHTML = "";
+  for (const c of cats || []) rows.appendChild(catRow(c));
+}
+
+$("add-cat-btn").addEventListener("click", () => $("cat-rows").appendChild(catRow()));
+$("default-cat-btn").addEventListener("click", () => fillCatRows(DEFAULT_PHOTO_CATEGORIES));
+
 function editType(id) {
   const t = state.typesById.get(id);
   if (!t) return;
@@ -186,6 +221,7 @@ function editType(id) {
   const rows = $("attr-rows");
   rows.innerHTML = "";
   for (const a of t.attributes || []) rows.appendChild(attrRow(a));
+  fillCatRows(t.photo_categories || []);
   msg("types-msg", "");
 }
 
@@ -195,6 +231,7 @@ $("new-type-btn").addEventListener("click", () => {
   $("type-form").reset();
   $("t-active").value = "1";
   $("attr-rows").innerHTML = "";
+  fillCatRows([]);
   msg("types-msg", "");
 });
 
@@ -208,6 +245,7 @@ $("type-form").addEventListener("submit", async (e) => {
     description: $("t-desc").value.trim() || null,
     active: $("t-active").value === "1",
     attributes: readAttrRows().filter((a) => a.key),
+    photo_categories: readCatRows(),
   };
   try {
     if (state.editingTypeId) {

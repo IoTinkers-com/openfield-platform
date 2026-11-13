@@ -19,7 +19,23 @@ export function simulatedHardware() {
       ];
     },
     openCamera() {
-      return { stream: null, settings: {}, label: "simulada" };
+      return {
+        stream: null,
+        track: null,
+        settings: {},
+        label: "simulada",
+        capabilities: { torch: false, zoom: null },
+      };
+    },
+    setTorch() {
+      return false;
+    },
+    setZoom() {
+      return false;
+    },
+    watchLocation(onFix) {
+      if (typeof onFix === "function") onFix({ lon: -70.65, lat: -33.45, accuracy: 10 });
+      return () => {};
     },
     startAudioRecording() {
       let done = false;

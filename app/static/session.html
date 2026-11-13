@@ -83,34 +83,46 @@ function moveMediaDialog(mediaItem) {
     _moveDialog.className = 'of-card';
     _moveDialog.style.maxWidth = '30rem';
     _moveDialog.innerHTML = `
-      <h3 class="of-section-title">Mover a otro activo</h3>
+      <h3 class="of-section-title">Editar medio</h3>
+      <div class="of-field"><label>Leyenda</label><textarea maxlength="500" rows="2" data-caption></textarea></div>
+      <h4 class="of-section-title" style="margin-top:var(--of-space-3)">Mover a otro activo</h4>
       <div class="of-field"><input type="search" placeholder="Buscar activo" maxlength="100" data-q></div>
-      <div class="of-field"><select data-target size="6" style="width:100%"></select></div>
+      <div class="of-field"><select data-target size="5" style="width:100%"></select></div>
       <div class="of-actions">
-        <button class="of-btn primary" data-save>Mover</button>
+        <button class="of-btn primary" data-save>Guardar</button>
         <button class="of-btn" data-close>Cancelar</button>
       </div>`;
     _moveDialog.querySelector('[data-close]').addEventListener('click', () => _moveDialog.close());
     _moveDialog.querySelector('[data-q]').addEventListener('input', async (e) => {
       const assets = await searchAssetsApi(e.target.value);
-      _moveDialog.querySelector('[data-target]').innerHTML = assets
-        .filter((a) => a.status !== 'decommissioned')
-        .map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name || a.id)} (${escapeHtml(a.id)})</option>`)
-        .join('');
+      const current = _moveDialog.dataset.currentAsset || '';
+      const opts = ['<option value="">— sin cambio —</option>'].concat(
+        assets
+          .filter((a) => a.status !== 'decommissioned' && a.id !== current)
+          .map((a) => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name || a.id)} (${escapeHtml(a.id)})</option>`),
+      );
+      _moveDialog.querySelector('[data-target]').innerHTML = opts.join('');
     });
     document.body.appendChild(_moveDialog);
   }
+  _moveDialog.dataset.currentAsset = mediaItem.asset_id || '';
   const q = _moveDialog.querySelector('[data-q]');
   q.value = '';
   q.dispatchEvent(new Event('input'));
+  _moveDialog.querySelector('[data-caption]').value = (mediaItem.metadata || {}).caption || '';
   _moveDialog.querySelector('[data-save]').onclick = async () => {
     const target = _moveDialog.querySelector('[data-target]').value;
-    if (!target) return;
+    const caption = _moveDialog.querySelector('[data-caption]').value.trim();
+    const meta = { ...(mediaItem.metadata || {}) };
+    if (caption) meta.caption = caption.slice(0, 500); else delete meta.caption;
+    const changes = { metadata: meta };
+    if (target && target !== mediaItem.asset_id) changes.asset_id = target;
+    if (!target && caption === ((mediaItem.metadata || {}).caption || '')) return _moveDialog.close();
     try {
-      await apiPatch(mediaItem.id, { asset_id: target }, 'reasignación desde sesión');
+      await apiPatch(mediaItem.id, changes, 'edición desde sesión');
       _moveDialog.close();
       load();
-    } catch (e) { alert('No se pudo mover: ' + e.message); }
+    } catch (e) { alert('No se pudo guardar: ' + e.message); }
   };
   _moveDialog.showModal();
 }

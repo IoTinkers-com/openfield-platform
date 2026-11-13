@@ -75,6 +75,14 @@ class AttributeDefIn(BaseModel):
     verify_in_field: bool = True
 
 
+class PhotoCategoryIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=50, pattern=r"^[a-z][a-z0-9_]{0,49}$")
+    label: str = Field(min_length=1, max_length=100)
+    active: bool = True
+
+
 class AssetTypeIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -85,6 +93,7 @@ class AssetTypeIn(BaseModel):
     description: str | None = Field(default=None, max_length=2000)
     active: bool = True
     attributes: list[AttributeDefIn] = Field(default_factory=list, max_length=200)
+    photo_categories: list[PhotoCategoryIn] | None = Field(default=None, max_length=30)
 
 
 class AssetIn(BaseModel):
@@ -329,6 +338,14 @@ def _check_attr_defs(attrs: list[AttributeDefIn]) -> None:
             )
 
 
+def _check_photo_categories(cats: list[PhotoCategoryIn] | None) -> None:
+    if not cats:
+        return
+    keys = [c.key for c in cats]
+    if len(set(keys)) != len(keys):
+        raise HTTPException(status_code=422, detail="categorías de foto duplicadas")
+
+
 @router.get("/admin/asset-types")
 def list_asset_types(
     tenant_id: str = Query(default=DEFAULT_TENANT, max_length=80),
@@ -350,6 +367,7 @@ def list_asset_types(
 @router.post("/admin/asset-types", status_code=201)
 def create_asset_type(payload: AssetTypeIn, db: Session = Depends(get_db)):
     _check_attr_defs(payload.attributes)
+    _check_photo_categories(payload.photo_categories)
     doc_id = payload.id or new_doc_id("atype")
     if db.get(Document, doc_id) is not None:
         raise HTTPException(status_code=409, detail="id ya existe")
@@ -372,6 +390,8 @@ def create_asset_type(payload: AssetTypeIn, db: Session = Depends(get_db)):
         "created_at": now,
         "updated_at": None,
     }
+    if payload.photo_categories is not None:
+        doc["photo_categories"] = [c.model_dump() for c in payload.photo_categories]
     _insert_document(db, doc, "asset-type")
     db.commit()
     return doc
@@ -388,6 +408,7 @@ def update_asset_type(type_id: str, payload: AssetTypeIn, db: Session = Depends(
     if payload.tenant_id != row.tenant_id:
         raise HTTPException(status_code=422, detail="tenant_id no coincide")
     _check_attr_defs(payload.attributes)
+    _check_photo_categories(payload.photo_categories)
 
     # No se permite quitar (ni cambiar el tipo de) un atributo que ya tiene valores.
     used = _used_attribute_keys(db, row.tenant_id, type_id)
@@ -430,6 +451,8 @@ def update_asset_type(type_id: str, payload: AssetTypeIn, db: Session = Depends(
         {**a.model_dump(), "order": i if "order" not in a.model_fields_set else a.order}
         for i, a in enumerate(payload.attributes)
     ]
+    if payload.photo_categories is not None:
+        doc["photo_categories"] = [c.model_dump() for c in payload.photo_categories]
     save_update(db, row, doc, action="update", source="manual")
     db.commit()
     return row.body
