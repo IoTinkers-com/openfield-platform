@@ -1,0 +1,11 @@
+﻿tag;name;functional_location;parent_tag;manufacturer;model;serial_number;criticality;status;lat;lon;attr:potencia_kw;attr:tension_v;attr:corriente_a;attr:rpm;attr:grado_ip;attr:anio_fabricacion;attr:observaciones
+MOT-001;Motor bomba P-101;Planta 1 / Sala de bombas;;WEG;W22;SN-1001;A;in_service;-33,451;-70,651;15,5;380;29,5;2950;IP55;2019;Correa de transmisión nueva 2025
+MOT-002;Motor bomba P-102;Planta 1 / Sala de bombas;;WEG;W22;SN-1002;A;in_service;-33,451;-70,652;15,5;380;29,5;2950;IP55;2019;
+MOT-003;Motor ventilador V-201;Planta 1 / Nave 2;;Siemens;1LE1;SN-1003;B;in_service;-33,452;-70,653;7,5;380;14,8;2930;IP55;2021;
+MOT-004;Motor ventilador V-202;Planta 1 / Nave 2;;Siemens;1LE1;SN-1004;B;in_service;-33,452;-70,654;7,5;380;14,8;2930;IP55;2021;
+MOT-005;Motor compresor C-301;Planta 2 / Compresores;;Atlas Copco;GA37;SN-1005;A;in_service;-33,453;-70,655;37;380;68;2970;IP55;2018;Revisar vibración
+MOT-006;Motor cinta T-401;Planta 2 / Transporte;MOT-005;SEW;R97;SN-1006;B;in_service;-33,454;-70,656;5,5;380;11,2;1450;IP54;2020;
+MOT-007;Motor cinta T-402;Planta 2 / Transporte;MOT-005;SEW;R97;SN-1007;B;standby;-33,454;-70,657;5,5;380;11,2;1450;IP54;2020;Reserva
+MOT-008;Motor mezclador M-501;Planta 3 / Proceso;;ABB;M3BP;SN-1008;A;in_service;-33,455;-70,658;22;380;41;1470;IP65;2017;
+MOT-009;Motor bomba P-501;Planta 3 / Proceso;;ABB;M3BP;SN-1009;B;in_service;-33,455;-70,659;11;380;21,5;1460;IP55;2022;
+MOT-010;Motor sin placa;Planta 3 / Patio;;Genérico;Desconocido;SN-1010;C;out_of_service;-33,456;-70,66;3;220;13,5;2850;IP99;2015;grado_ip con error intencional para probar dry-run

@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "atype-motor",
+  "name": "Motor eléctrico",
+  "equipment_class": "rotating/motor",
+  "description": "Motor eléctrico trifásico de inducción.",
+  "active": true,
+  "attributes": [
+    {
+      "key": "potencia_kw",
+      "label": "Potencia",
+      "type": "number",
+      "unit": "kW",
+      "required": true,
+      "options": null,
+      "active": true,
+      "order": 0,
+      "verify_in_field": true
+    },
+    {
+      "key": "grado_ip",
+      "label": "Grado de protección IP",
+      "type": "select",
+      "unit": null,
+      "required": false,
+      "options": ["IP54", "IP55", "IP65"],
+      "active": true,
+      "order": 1,
+      "verify_in_field": true
+    },
+    {
+      "key": "observaciones",
+      "label": "Observaciones",
+      "type": "text",
+      "unit": null,
+      "required": false,
+      "options": null,
+      "active": true,
+      "order": 2,
+      "verify_in_field": false
+    }
+  ],
+  "created_at": "2026-11-13T09:00:00Z",
+  "updated_at": null
+}

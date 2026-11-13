@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://iotinkers.com/openfield/schema/asset.schema.json",
   "title": "Asset",
-  "description": "Activo (equipo) inventariado o inspeccionado. Identidad canónica + N identificadores (AssetIdentifier).",
+  "description": "Activo (equipo) inventariado o inspeccionado. Identidad canónica + N identificadores (AssetIdentifier). Campos de registro y ciclo de vida: ADR-0020; verificación y precarga: ADR-0022.",
   "type": "object",
   "required": ["schema_version", "tenant_id", "id", "name"],
   "properties": {
@@ -10,7 +10,7 @@
     "tenant_id": { "type": "string", "minLength": 1 },
     "id": { "type": "string", "minLength": 1, "description": "Identidad canónica del activo." },
     "name": { "type": "string", "description": "Nombre o etiqueta del activo." },
-    "category": { "type": "string", "description": "Categoría (p. ej. 'electrical', 'motor', 'panel')." },
+    "category": { "type": ["string", "null"], "description": "Categoría (p. ej. 'electrical', 'motor', 'panel')." },
     "location": {
       "type": ["object", "null"],
       "description": "Ubicación del activo en WGS84 (exterior) o null (interior, se ubica por QR/TAG).",
@@ -19,6 +19,52 @@
         "coordinates": { "type": "array" }
       },
       "required": ["type", "coordinates"]
+    },
+    "asset_type_id": { "type": ["string", "null"], "description": "AssetType.id (ADR-0020)." },
+    "status": {
+      "type": ["string", "null"],
+      "enum": ["planned", "in_service", "standby", "out_of_service", "decommissioned", null],
+      "description": "Estado del ciclo de vida (ADR-0020)."
+    },
+    "status_reason": { "type": ["string", "null"] },
+    "status_changed_at": { "type": ["string", "null"], "format": "date-time" },
+    "attributes": {
+      "type": "object",
+      "description": "Valores de la ficha técnica: key -> valor, según AssetType.attributes (ADR-0020)."
+    },
+    "parent_id": { "type": ["string", "null"], "description": "Activo padre (jerarquía de instalación, estructura ISO 14224)." },
+    "functional_location": { "type": ["string", "null"], "description": "Ubicación funcional (p. ej. 'Planta 1 / Sala eléctrica / TB-01')." },
+    "manufacturer": { "type": ["string", "null"] },
+    "model": { "type": ["string", "null"] },
+    "serial_number": { "type": ["string", "null"] },
+    "criticality": { "type": ["string", "null"], "enum": ["A", "B", "C", null], "description": "Criticidad (A alta, B media, C baja)." },
+    "commissioned_at": { "type": ["string", "null"], "format": "date-time" },
+    "decommissioned_at": { "type": ["string", "null"], "format": "date-time" },
+    "data_source": {
+      "type": ["string", "null"],
+      "enum": ["csv_import", "field", "manual", null],
+      "description": "Origen del dato (ADR-0022)."
+    },
+    "import_batch_id": { "type": ["string", "null"], "description": "Lote de importación que creó/actualizó el activo (ADR-0022)." },
+    "verification_status": {
+      "type": ["string", "null"],
+      "enum": ["pending", "in_progress", "verified", "not_found", null],
+      "description": "Estado de verificación en terreno (ADR-0022)."
+    },
+    "verified_at": { "type": ["string", "null"], "format": "date-time" },
+    "attribute_verification": {
+      "type": "object",
+      "description": "Verificación por atributo de ficha técnica (ADR-0022).",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["pending", "confirmed", "corrected", "unverifiable"] },
+          "previous_value": {},
+          "verified_at": { "type": ["string", "null"], "format": "date-time" },
+          "session_id": { "type": ["string", "null"] }
+        }
+      }
     },
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": ["string", "null"], "format": "date-time" }

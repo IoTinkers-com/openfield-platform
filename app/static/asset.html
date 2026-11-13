@@ -9,7 +9,10 @@
 <body>
 <header class="of-topbar">
   <a class="of-brand" href="/"><span class="of-logo"></span> OpenField</a>
-  <a class="of-nav-link" href="/capture/">+ Ir a captura</a>
+  <nav style="display:flex; gap:var(--of-space-2)">
+    <a class="of-nav-link secondary" href="/admin/">Administración</a>
+    <a class="of-nav-link" href="/capture/">+ Ir a captura</a>
+  </nav>
 </header>
 
 <main class="of-shell">
@@ -17,6 +20,19 @@
 
   <section id="asset-summary" class="of-card">
     <div class="of-empty"><div class="of-empty-icon">⏳</div><p>Cargando expediente…</p></div>
+  </section>
+
+  <section id="datasheet-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Ficha técnica</h2>
+    <div id="datasheet-hierarchy" style="margin-bottom:var(--of-space-3)"></div>
+    <div style="overflow-x:auto">
+      <table class="of-table">
+        <thead><tr><th>Atributo</th><th>Valor</th><th>Verificación</th><th>Verificado</th></tr></thead>
+        <tbody id="datasheet"></tbody>
+      </table>
+    </div>
+    <progress id="verify-progress" class="of-progress" max="100" value="0" style="margin-top:var(--of-space-3)"></progress>
+    <p id="verify-progress-legend" class="of-progress-legend"></p>
   </section>
 
   <section id="identifiers-section" class="of-card" style="display:none">
@@ -53,15 +69,31 @@
     <h2 class="of-section-title">Respuestas de formulario</h2>
     <div id="forms" class="of-list"></div>
   </section>
+
+  <section id="history-section" class="of-card" style="display:none">
+    <h2 class="of-section-title">Historial</h2>
+    <div style="overflow-x:auto">
+      <table class="of-table">
+        <thead><tr><th>Rev.</th><th>Acción</th><th>Origen</th><th>Fecha</th><th>Motivo</th><th>Cambios</th></tr></thead>
+        <tbody id="history"></tbody>
+      </table>
+    </div>
+  </section>
 </main>
 
 <script type="module">
 import { emptyState, escapeHtml, formatDate, mediaCard } from "/static/js/dossier-common.js";
+import { statusBadge, verificationBadge, attrVerificationBadge, DATA_SOURCE_LABELS } from "/static/js/labels.js";
 
 const $ = (id) => document.getElementById(id);
 const assetId = location.pathname.replace(/\/$/, "").split("/").pop();
 
 function show(id) { $(id).style.display = ''; }
+
+const ACTION_LABELS = {
+  create: "Alta", update: "Edición", status: "Cambio de estado",
+  verify: "Verificación", delete: "Eliminación", restore: "Restauración", import: "Importación",
+};
 
 function renderAssetSummary(asset, identifiers) {
   $('crumb-asset').textContent = asset.name || asset.id;
@@ -69,11 +101,69 @@ function renderAssetSummary(asset, identifiers) {
   const idSummary = identifiers.length
     ? identifiers.map((i) => `${i.type.toUpperCase()}: ${escapeHtml(i.value)}`).join(' · ')
     : 'Sin identificadores registrados';
+  const extras = [
+    asset.manufacturer ? `${escapeHtml(asset.manufacturer)}${asset.model ? ' ' + escapeHtml(asset.model) : ''}` : '',
+    asset.serial_number ? `serie ${escapeHtml(asset.serial_number)}` : '',
+    asset.functional_location ? escapeHtml(asset.functional_location) : '',
+    asset.criticality ? `criticidad ${asset.criticality}` : '',
+    asset.data_source ? `origen: ${DATA_SOURCE_LABELS[asset.data_source] || asset.data_source}` : '',
+  ].filter(Boolean).join(' · ');
   $('asset-summary').innerHTML = `
     <h1 class="of-section-title" style="font-size:1.4rem">${escapeHtml(asset.name || asset.id)}</h1>
-    <div class="of-badge">${escapeHtml(asset.category || 'sin categoría')}</div>
+    <div class="of-chips">
+      ${statusBadge(asset.status)}
+      ${verificationBadge(asset.verification_status)}
+      <span class="of-badge">${escapeHtml(asset.category || 'sin categoría')}</span>
+    </div>
     <p style="color:var(--of-text-muted)">${escapeHtml(asset.id)} · ${idSummary}</p>
+    ${extras ? `<p style="color:var(--of-text-muted)">${extras}</p>` : ''}
+    <p><a href="/admin/#assets?id=${encodeURIComponent(asset.id)}">Editar en Administración →</a></p>
   `;
+}
+
+function renderDatasheet(asset, assetType, parent, children) {
+  const attrs = (asset.attributes) || {};
+  const defs = ((assetType && assetType.attributes) || []).sort((a, b) => (a.order || 0) - (b.order || 0));
+  const av = asset.attribute_verification || {};
+  if (!assetType && !Object.keys(attrs).length) return;
+  show('datasheet-section');
+
+  const parts = [];
+  if (parent) parts.push(`Padre: <a href="/assets/${encodeURIComponent(parent.id)}">${escapeHtml(parent.name || parent.id)}</a>`);
+  if (assetType) parts.push(`Tipo: ${escapeHtml(assetType.name)}${assetType.equipment_class ? ` (${escapeHtml(assetType.equipment_class)})` : ''}`);
+  if (children.length) {
+    parts.push('Hijos: ' + children.map((c) => `<a href="/assets/${encodeURIComponent(c.id)}">${escapeHtml(c.name || c.id)}</a>`).join(', '));
+  }
+  $('datasheet-hierarchy').innerHTML = parts.join(' · ');
+
+  const rows = [];
+  const seen = new Set();
+  for (const d of defs) {
+    seen.add(d.key);
+    const v = attrs[d.key];
+    const ver = av[d.key] || {};
+    rows.push(`<tr${d.active === false ? ' class="of-deleted"' : ''}>
+      <td>${escapeHtml(d.label)}${d.unit ? ` (${escapeHtml(d.unit)})` : ''}${d.active === false ? ' <span class="of-badge">inactivo</span>' : ''}</td>
+      <td>${v === null || v === undefined ? '<span class="of-progress-legend">vacío</span>' : escapeHtml(String(v))}</td>
+      <td>${attrVerificationBadge(ver.status)}</td>
+      <td>${formatDate(ver.verified_at)}</td>
+    </tr>`);
+  }
+  for (const [k, v] of Object.entries(attrs)) {
+    if (seen.has(k)) continue;
+    const ver = av[k] || {};
+    rows.push(`<tr><td>${escapeHtml(k)} <span class="of-badge">fuera de tipo</span></td>
+      <td>${escapeHtml(String(v))}</td><td>${attrVerificationBadge(ver.status)}</td><td>${formatDate(ver.verified_at)}</td></tr>`);
+  }
+  $('datasheet').innerHTML = rows.join('');
+
+  const relevant = defs.filter((d) => d.active !== false && d.verify_in_field !== false && (attrs[d.key] != null || d.required));
+  const done = relevant.filter((d) => ['confirmed', 'corrected', 'unverifiable'].includes((av[d.key] || {}).status)).length;
+  const pct = relevant.length ? Math.round(100 * done / relevant.length) : (asset.verified_at ? 100 : 0);
+  $('verify-progress').value = pct;
+  $('verify-progress-legend').textContent = relevant.length
+    ? `${done}/${relevant.length} atributos verificados en terreno (${pct}%)`
+    : '';
 }
 
 function renderIdentifiers(identifiers) {
@@ -136,18 +226,35 @@ function renderForms(formResponses) {
     .join('');
 }
 
+function renderHistory(history) {
+  if (!history || !history.length) return;
+  show('history-section');
+  $('history').innerHTML = history
+    .map((r) => `<tr>
+      <td>${r.revision}</td>
+      <td>${escapeHtml(ACTION_LABELS[r.action] || r.action)}</td>
+      <td>${escapeHtml(r.source)}${r.batch_id ? ` · ${escapeHtml(r.batch_id)}` : ''}</td>
+      <td>${formatDate(r.created_at)}</td>
+      <td>${escapeHtml(r.reason || '—')}</td>
+      <td class="of-progress-legend">${escapeHtml((r.changed_keys || []).join(', '))}</td>
+    </tr>`)
+    .join('');
+}
+
 async function load() {
   try {
     const res = await fetch(location.pathname, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (!res.ok) throw new Error(res.status === 404 ? 'Activo no encontrado' : `Error ${res.status}`);
     const dossier = await res.json();
     renderAssetSummary(dossier.asset, dossier.identifiers);
+    renderDatasheet(dossier.asset, dossier.asset_type, dossier.parent || null, dossier.children || []);
     renderIdentifiers(dossier.identifiers);
     renderSessions(dossier.sessions);
     renderMedia(dossier.media_items);
     renderObservations(dossier.observations);
     renderTranscripts(dossier.transcripts);
     renderForms(dossier.form_responses);
+    renderHistory(dossier.history);
   } catch (e) {
     emptyState($('asset-summary'), { icon: '⚠️', title: 'No se pudo cargar el expediente.', hint: e.message, cta: { href: '/', label: 'Volver al dashboard' } });
   }

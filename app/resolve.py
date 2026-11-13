@@ -19,7 +19,10 @@ def get_db():
 
 @router.get("/resolve")
 def resolve(value: str, db: Session = Depends(get_db)):
-    stmt = select(Document).where(Document.entity_type == "asset-identifier")
+    stmt = select(Document).where(
+        Document.entity_type == "asset-identifier",
+        Document.deleted_at.is_(None),
+    )
     matches = [r.body for r in db.execute(stmt).scalars().all() if r.body.get("value") == value]
     if not matches:
         raise HTTPException(status_code=404, detail="identificador no encontrado")
@@ -27,6 +30,8 @@ def resolve(value: str, db: Session = Depends(get_db)):
     for ident in matches:
         asset_id = ident.get("asset_id")
         asset_row = db.get(Document, asset_id) if asset_id else None
+        if asset_row is not None and asset_row.deleted_at is not None:
+            continue  # identificador de un activo eliminado no resuelve
         result.append(
             {
                 "asset_id": asset_id,
@@ -35,4 +40,6 @@ def resolve(value: str, db: Session = Depends(get_db)):
                 "asset": asset_row.body if asset_row and asset_row.entity_type == "asset" else None,
             }
         )
+    if not result:
+        raise HTTPException(status_code=404, detail="identificador no encontrado")
     return result

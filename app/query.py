@@ -21,6 +21,7 @@ def get_db():
 def list_documents(
     tenant_id: str | None = None,
     entity_type: str | None = None,
+    include_deleted: bool = False,
     db: Session = Depends(get_db),
 ):
     stmt = select(Document).order_by(Document.created_at)
@@ -28,12 +29,18 @@ def list_documents(
         stmt = stmt.where(Document.tenant_id == tenant_id)
     if entity_type:
         stmt = stmt.where(Document.entity_type == entity_type)
+    if not include_deleted:
+        stmt = stmt.where(Document.deleted_at.is_(None))
     return [row.body for row in db.execute(stmt).scalars().all()]
 
 
 @router.get("/documents/{doc_id}")
-def get_document(doc_id: str, db: Session = Depends(get_db)):
+def get_document(
+    doc_id: str,
+    include_deleted: bool = False,
+    db: Session = Depends(get_db),
+):
     row = db.get(Document, doc_id)
-    if row is None:
+    if row is None or (row.deleted_at is not None and not include_deleted):
         raise HTTPException(status_code=404, detail="no encontrado")
     return row.body

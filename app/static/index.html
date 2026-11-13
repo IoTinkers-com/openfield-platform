@@ -15,7 +15,10 @@
 <body>
 <header class="of-topbar">
   <a class="of-brand" href="/"><span class="of-logo"></span> OpenField</a>
-  <a class="of-nav-link" href="/capture/">+ Ir a captura</a>
+  <nav style="display:flex; gap:var(--of-space-2)">
+    <a class="of-nav-link secondary" href="/admin/">Administración</a>
+    <a class="of-nav-link" href="/capture/">+ Ir a captura</a>
+  </nav>
 </header>
 
 <main class="of-shell">
@@ -33,6 +36,7 @@
           <option value="media-item">Medios (media-item)</option>
           <option value="">Todos los tipos</option>
           <option value="asset">Activos (asset)</option>
+          <option value="asset-type">Tipos de activo</option>
           <option value="asset-identifier">Identificadores de activo</option>
           <option value="session">Sesiones</option>
           <option value="observation">Observaciones</option>
@@ -48,6 +52,18 @@
         <label for="f-asset">Activo</label>
         <select id="f-asset">
           <option value="">Todos los activos</option>
+        </select>
+      </div>
+      <div class="of-field">
+        <label for="f-status">Estado</label>
+        <select id="f-status">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="of-field">
+        <label for="f-verif">Verificación</label>
+        <select id="f-verif">
+          <option value="">Todos</option>
         </select>
       </div>
       <button type="submit" class="of-btn primary">Aplicar</button>
@@ -77,7 +93,9 @@
 
 </main>
 
-<script>
+<script type="module">
+import { STATUS_LABELS, VERIFICATION_LABELS, statusBadge, verificationBadge } from "/static/js/labels.js";
+
 const map = L.map('map').setView([-33.45, -70.65], 5);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
@@ -85,6 +103,11 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 const markerGroup = L.featureGroup().addTo(map);
 
 const $ = (id) => document.getElementById(id);
+
+$('f-status').innerHTML = '<option value="">Todos</option>' +
+  Object.entries(STATUS_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+$('f-verif').innerHTML = '<option value="">Todos</option>' +
+  Object.entries(VERIFICATION_LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
 
 function cell(value) {
   const td = document.createElement('td');
@@ -157,9 +180,19 @@ function popupHtml(d) {
   return `<div class="of-popup">${img}<div><div>${d.type || 'media'}</div><div class="of-popup-id">${d.id}</div><a href="#media-${d.id}">Ver en galería</a></div></div>`;
 }
 
-function renderMap(mediaDocs) {
+function assetPasses(assetId, assetsById, filters) {
+  if (!filters.status && !filters.verif) return true;
+  const asset = assetsById.get(assetId);
+  if (!asset) return false;
+  if (filters.status && asset.status !== filters.status) return false;
+  if (filters.verif && asset.verification_status !== filters.verif) return false;
+  return true;
+}
+
+function renderMap(mediaDocs, assetsById, filters) {
   markerGroup.clearLayers();
   for (const d of mediaDocs) {
+    if (!assetPasses(d.asset_id, assetsById, filters)) continue;
     if (d.geometry && d.geometry.type === 'Point') {
       const [lon, lat] = d.geometry.coordinates;
       if (lon == null || lat == null) continue; // salta medios sin coordenadas válidas
@@ -171,7 +204,7 @@ function renderMap(mediaDocs) {
   }
 }
 
-function renderByAsset(mediaDocs, assetsById) {
+function renderByAsset(mediaDocs, assetsById, filters) {
   const container = $('by-asset');
   if (!mediaDocs.length) {
     emptyState(container, {
@@ -190,6 +223,7 @@ function renderByAsset(mediaDocs, assetsById) {
   }
   container.innerHTML = '';
   for (const [assetId, items] of groups) {
+    if (!assetPasses(assetId === 'sin-activo' ? null : assetId, assetsById, filters)) continue;
     const asset = assetsById.get(assetId);
     const details = document.createElement('details');
     details.className = 'of-asset-group';
@@ -197,8 +231,9 @@ function renderByAsset(mediaDocs, assetsById) {
     const summary = document.createElement('summary');
     const label = asset ? asset.name : (assetId === 'sin-activo' ? 'Sin activo asignado' : assetId);
     const countBadge = `<span class="of-badge">${items.length} medio${items.length === 1 ? '' : 's'}</span>`;
+    const stateBadges = asset ? ` ${statusBadge(asset.status)} ${verificationBadge(asset.verification_status)}` : '';
     if (assetId !== 'sin-activo') {
-      summary.innerHTML = `<a href="/assets/${encodeURIComponent(assetId)}">${label}</a> ${countBadge}`;
+      summary.innerHTML = `<a href="/assets/${encodeURIComponent(assetId)}">${label}</a>${stateBadges} ${countBadge}`;
       summary.querySelector('a').addEventListener('click', (e) => e.stopPropagation());
     } else {
       summary.innerHTML = `${label} ${countBadge}`;
@@ -250,6 +285,8 @@ function currentFilters() {
     tenant_id: $('f-tenant').value.trim(),
     entity_type: $('f-entity').value,
     asset_id: $('f-asset').value,
+    status: $('f-status').value,
+    verif: $('f-verif').value,
   };
 }
 
@@ -258,6 +295,8 @@ function applyFiltersToUrl(filters) {
   if (filters.tenant_id) params.set('tenant_id', filters.tenant_id);
   if (filters.entity_type) params.set('entity_type', filters.entity_type);
   if (filters.asset_id) params.set('asset_id', filters.asset_id);
+  if (filters.status) params.set('status', filters.status);
+  if (filters.verif) params.set('verif', filters.verif);
   const qs = params.toString();
   history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
 }
@@ -268,6 +307,8 @@ function filtersFromUrl() {
     tenant_id: params.get('tenant_id') || '',
     entity_type: params.get('entity_type') ?? 'media-item',
     asset_id: params.get('asset_id') || '',
+    status: params.get('status') || '',
+    verif: params.get('verif') || '',
   };
 }
 
@@ -296,6 +337,8 @@ async function load() {
   const filters = filtersFromUrl();
   $('f-tenant').value = filters.tenant_id;
   $('f-entity').value = filters.entity_type;
+  $('f-status').value = filters.status;
+  $('f-verif').value = filters.verif;
 
   const [assets, mediaDocs] = await Promise.all([
     fetchDocs('asset', filters.tenant_id).catch(() => []),
@@ -309,8 +352,8 @@ async function load() {
   $('map-section').style.display = showMapAndGallery ? '' : 'none';
   $('gallery-section').style.display = showMapAndGallery ? '' : 'none';
   if (showMapAndGallery) {
-    renderMap(filteredMedia);
-    renderByAsset(filteredMedia, assetsById);
+    renderMap(filteredMedia, assetsById, filters);
+    renderByAsset(filteredMedia, assetsById, filters);
   }
 
   let tableDocs = filteredMedia;
@@ -334,6 +377,8 @@ $('filters').addEventListener('submit', (e) => {
 $('clear-filters').addEventListener('click', () => {
   $('f-tenant').value = '';
   $('f-entity').value = 'media-item';
+  $('f-status').value = '';
+  $('f-verif').value = '';
   history.replaceState(null, '', location.pathname);
   load();
 });

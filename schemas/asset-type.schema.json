@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/asset-type.schema.json",
+  "title": "AssetType",
+  "description": "Tipo de activo con atributos configurables (ficha técnica). Estructura inspirada en ISO 14224 (clase/tipo de equipo). ADR-0020.",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "name", "attributes"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "equipment_class": { "type": ["string", "null"], "description": "Código de clase de equipo según la taxonomía adoptada (p. ej. ISO 14224). Opcional." },
+    "description": { "type": ["string", "null"] },
+    "active": { "type": "boolean" },
+    "attributes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "type"],
+        "properties": {
+          "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,49}$" },
+          "label": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "enum": ["text", "number", "boolean", "select", "date"] },
+          "unit": { "type": ["string", "null"] },
+          "required": { "type": "boolean" },
+          "options": { "type": ["array", "null"], "items": { "type": "string" } },
+          "active": { "type": "boolean" },
+          "order": { "type": "integer", "minimum": 0 },
+          "verify_in_field": { "type": "boolean", "description": "Si el valor debe verificarse en terreno (ADR-0022)." }
+        }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

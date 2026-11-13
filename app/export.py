@@ -86,7 +86,9 @@ def stac_root():
 
 @router.get("/stac/items")
 def stac_items(tenant_id: str | None = None, db: Session = Depends(get_db)):
-    stmt = select(Document).where(Document.entity_type == "media-item")
+    stmt = select(Document).where(
+        Document.entity_type == "media-item", Document.deleted_at.is_(None)
+    )
     if tenant_id:
         stmt = stmt.where(Document.tenant_id == tenant_id)
     rows = db.execute(stmt).scalars().all()
@@ -96,7 +98,7 @@ def stac_items(tenant_id: str | None = None, db: Session = Depends(get_db)):
 @router.get("/stac/items/{doc_id}")
 def stac_item(doc_id: str, db: Session = Depends(get_db)):
     row = db.get(Document, doc_id)
-    if row is None or row.entity_type != "media-item":
+    if row is None or row.entity_type != "media-item" or row.deleted_at is not None:
         raise HTTPException(status_code=404, detail="no encontrado")
     return to_stac_item(row.body)
 
@@ -118,7 +120,9 @@ def collections():
 
 @router.get("/collections/media-item/items")
 def collection_items(tenant_id: str | None = None, db: Session = Depends(get_db)):
-    stmt = select(Document).where(Document.entity_type == "media-item")
+    stmt = select(Document).where(
+        Document.entity_type == "media-item", Document.deleted_at.is_(None)
+    )
     if tenant_id:
         stmt = stmt.where(Document.tenant_id == tenant_id)
     rows = db.execute(stmt).scalars().all()

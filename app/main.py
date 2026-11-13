@@ -8,12 +8,14 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import MEDIA_DIR
+from .csv_import import router as csv_router
 from .db import init_db
 from .dossier import router as dossier_router
 from .export import router as export_router
 from .ingest import router as ingest_router
 from .media import router as media_router
 from .query import router as query_router
+from .registry import router as registry_router
 from .resolve import router as resolve_router
 from .transcribe import router as transcribe_router
 
@@ -37,6 +39,15 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    return response
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -49,6 +60,8 @@ app.include_router(media_router)
 app.include_router(resolve_router)
 app.include_router(transcribe_router)
 app.include_router(dossier_router)
+app.include_router(registry_router)
+app.include_router(csv_router)
 
 _STATIC = Path(__file__).parent / "static"
 app.mount("/media", StaticFiles(directory=str(MEDIA_DIR)), name="media")

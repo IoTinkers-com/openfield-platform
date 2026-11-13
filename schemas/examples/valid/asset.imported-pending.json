@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "asset-imp-001",
+  "name": "Motor bomba P-101",
+  "category": "motor",
+  "location": null,
+  "asset_type_id": "atype-motor",
+  "status": "in_service",
+  "status_reason": null,
+  "status_changed_at": "2026-11-13T09:05:00Z",
+  "attributes": {
+    "potencia_kw": 15.5,
+    "grado_ip": "IP55"
+  },
+  "parent_id": null,
+  "functional_location": "Planta 1 / Sala de bombas",
+  "manufacturer": "WEG",
+  "model": "W22",
+  "serial_number": "SN-12345",
+  "criticality": "B",
+  "commissioned_at": "2026-11-13T09:05:00Z",
+  "decommissioned_at": null,
+  "data_source": "csv_import",
+  "import_batch_id": "batch-001",
+  "verification_status": "in_progress",
+  "verified_at": null,
+  "attribute_verification": {
+    "potencia_kw": {
+      "status": "confirmed",
+      "previous_value": null,
+      "verified_at": "2026-11-13T10:00:00Z",
+      "session_id": "sess-imp-001"
+    },
+    "grado_ip": {
+      "status": "pending",
+      "previous_value": null,
+      "verified_at": null,
+      "session_id": null
+    }
+  },
+  "created_at": "2026-11-13T09:05:00Z",
+  "updated_at": "2026-11-13T10:00:00Z"
+}

@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenField · Administración</title>
+<link rel="stylesheet" href="/static/css/openfield.css">
+<style>
+  #attr-rows { max-height: 340px; overflow-y: auto; }
+  .of-admin-grid { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: var(--of-space-4); }
+  @media (max-width: 800px) { .of-admin-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="of-topbar">
+  <a class="of-brand" href="/"><span class="of-logo"></span> OpenField</a>
+  <nav style="display:flex; gap:var(--of-space-2)">
+    <a class="of-nav-link secondary" href="/">Dashboard</a>
+    <a class="of-nav-link" href="/capture/">+ Ir a captura</a>
+  </nav>
+</header>
+
+<main class="of-shell">
+  <nav class="of-breadcrumb"><a href="/">Dashboard</a> › Administración</nav>
+
+  <nav class="of-tabs">
+    <button class="of-tab" data-tab="assets" type="button">Activos</button>
+    <button class="of-tab" data-tab="types" type="button">Tipos de activo</button>
+    <button class="of-tab" data-tab="import" type="button">Importar CSV</button>
+    <button class="of-tab" data-tab="states" type="button">Estados</button>
+  </nav>
+
+  <!-- ===================== Activos ===================== -->
+  <section id="tab-assets">
+    <section class="of-card">
+      <div class="of-actions" style="margin-top:0">
+        <button type="button" id="new-asset-btn" class="of-btn primary">+ Enrolar activo</button>
+      </div>
+      <form id="asset-filters" class="of-filters">
+        <div class="of-field">
+          <label for="a-q">Buscar</label>
+          <input id="a-q" type="search" placeholder="Nombre, tag, serie, ubicación" maxlength="100">
+        </div>
+        <div class="of-field">
+          <label for="a-status">Estado</label>
+          <select id="a-status"><option value="">Todos</option></select>
+        </div>
+        <div class="of-field">
+          <label for="a-type">Tipo</label>
+          <select id="a-type"><option value="">Todos</option></select>
+        </div>
+        <div class="of-field">
+          <label for="a-verif">Verificación</label>
+          <select id="a-verif"><option value="">Todos</option></select>
+        </div>
+        <div class="of-field">
+          <label for="a-batch">Lote</label>
+          <select id="a-batch"><option value="">Todos</option></select>
+        </div>
+        <div class="of-field">
+          <label for="a-deleted">Eliminados</label>
+          <select id="a-deleted">
+            <option value="">Ocultos</option>
+            <option value="1">Incluir</option>
+          </select>
+        </div>
+        <button type="submit" class="of-btn primary">Filtrar</button>
+      </form>
+      <div style="overflow-x:auto; margin-top:var(--of-space-3)">
+        <table class="of-table">
+          <thead><tr><th>Activo</th><th>Tag</th><th>Tipo</th><th>Estado</th><th>Verificación</th><th>Acciones</th></tr></thead>
+          <tbody id="assets-tbody"></tbody>
+        </table>
+      </div>
+      <div class="of-actions" id="assets-pager">
+        <button type="button" id="assets-prev" class="of-btn">‹ Anterior</button>
+        <span id="assets-page-info" class="of-progress-legend"></span>
+        <button type="button" id="assets-next" class="of-btn">Siguiente ›</button>
+      </div>
+      <p id="assets-msg" class="of-status"></p>
+    </section>
+  </section>
+
+  <!-- ===================== Tipos ===================== -->
+  <section id="tab-types" style="display:none">
+    <div class="of-admin-grid">
+      <section class="of-card">
+        <h2 class="of-section-title">Tipos</h2>
+        <div id="types-list" class="of-list"></div>
+        <div class="of-actions">
+          <button type="button" id="new-type-btn" class="of-btn primary">+ Nuevo tipo</button>
+        </div>
+      </section>
+      <section class="of-card">
+        <h2 class="of-section-title" id="type-form-title">Tipo de activo</h2>
+        <form id="type-form">
+          <div class="of-filters">
+            <div class="of-field"><label for="t-name">Nombre</label><input id="t-name" required maxlength="200"></div>
+            <div class="of-field"><label for="t-class">Clase de equipo</label><input id="t-class" maxlength="100" placeholder="p. ej. rotating/motor"></div>
+            <div class="of-field"><label for="t-desc">Descripción</label><input id="t-desc" maxlength="2000"></div>
+            <div class="of-field"><label for="t-active">Activo</label><select id="t-active"><option value="1">Sí</option><option value="">No</option></select></div>
+          </div>
+          <h3 class="of-section-title" style="margin-top:var(--of-space-4)">Atributos</h3>
+          <div class="of-attr-row" style="font-weight:700">
+            <span>Clave</span><span>Etiqueta</span><span>Tipo</span><span>Unidad</span>
+            <span>Opciones</span><span>Req.</span><span>Activo</span><span>Verif.</span><span></span>
+          </div>
+          <div id="attr-rows"></div>
+          <div class="of-actions">
+            <button type="button" id="add-attr-btn" class="of-btn">+ Agregar atributo</button>
+            <button type="submit" class="of-btn primary">Guardar tipo</button>
+          </div>
+          <p id="types-msg" class="of-status"></p>
+        </form>
+      </section>
+    </div>
+  </section>
+
+  <!-- ===================== Importar ===================== -->
+  <section id="tab-import" style="display:none">
+    <section class="of-card">
+      <h2 class="of-section-title">Precarga de activos por CSV</h2>
+      <div class="of-filters">
+        <div class="of-field">
+          <label for="imp-type">Tipo de activo</label>
+          <select id="imp-type"></select>
+        </div>
+        <div class="of-field">
+          <label>Plantilla</label>
+          <a id="imp-template" href="#" class="of-btn" style="text-decoration:none">Descargar plantilla CSV</a>
+        </div>
+        <div class="of-field">
+          <label for="imp-file">Archivo CSV (máx. 5 MB / 5 000 filas)</label>
+          <input id="imp-file" type="file" accept=".csv,text/csv">
+        </div>
+      </div>
+      <div class="of-actions">
+        <button type="button" id="imp-preview" class="of-btn">Previsualizar</button>
+        <button type="button" id="imp-commit" class="of-btn primary" disabled>Importar</button>
+      </div>
+      <p id="imp-msg" class="of-status"></p>
+      <div id="imp-report"></div>
+    </section>
+
+    <section class="of-card">
+      <h2 class="of-section-title">Lotes de importación</h2>
+      <div style="overflow-x:auto">
+        <table class="of-table">
+          <thead><tr><th>Lote</th><th>Archivo</th><th>Filas</th><th>Creados</th><th>Actualizados</th><th>Errores</th><th>Verificación</th><th></th></tr></thead>
+          <tbody id="batches-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <!-- ===================== Estados ===================== -->
+  <section id="tab-states" style="display:none">
+    <section class="of-card">
+      <h2 class="of-section-title">Estados del ciclo de vida</h2>
+      <table class="of-table" id="states-table">
+        <thead><tr><th>Código</th><th>Etiqueta</th><th>Regla</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+    <section class="of-card">
+      <h2 class="of-section-title">Verificación en terreno</h2>
+      <table class="of-table" id="verif-table">
+        <thead><tr><th>Código</th><th>Etiqueta</th><th>Ámbito</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </section>
+</main>
+
+<!-- Diálogo: enrolar / editar activo -->
+<dialog id="asset-dialog" class="of-dialog">
+  <h3 class="of-section-title" id="asset-dialog-title">Activo</h3>
+  <form id="asset-form">
+    <div class="of-filters">
+      <div class="of-field"><label for="f-asset-name">Nombre</label><input id="f-asset-name" required maxlength="200"></div>
+      <div class="of-field"><label for="f-asset-type">Tipo</label><select id="f-asset-type"></select></div>
+      <div class="of-field"><label for="f-asset-tag">TAG</label><input id="f-asset-tag" maxlength="100"></div>
+      <div class="of-field"><label for="f-asset-crit">Criticidad</label>
+        <select id="f-asset-crit"><option value="">—</option><option>A</option><option>B</option><option>C</option></select>
+      </div>
+      <div class="of-field"><label for="f-asset-loc">Ubicación funcional</label><input id="f-asset-loc" maxlength="200"></div>
+      <div class="of-field"><label for="f-asset-parent">Padre (tag)</label><input id="f-asset-parent" maxlength="100" placeholder="TAG del activo padre"></div>
+    </div>
+    <div class="of-filters" style="margin-top:var(--of-space-2)">
+      <div class="of-field"><label for="f-asset-mfr">Fabricante</label><input id="f-asset-mfr" maxlength="200"></div>
+      <div class="of-field"><label for="f-asset-model">Modelo</label><input id="f-asset-model" maxlength="200"></div>
+      <div class="of-field"><label for="f-asset-serial">N.º de serie</label><input id="f-asset-serial" maxlength="200"></div>
+      <div class="of-field"><label for="f-asset-lat">Lat</label><input id="f-asset-lat" inputmode="decimal" maxlength="20"></div>
+      <div class="of-field"><label for="f-asset-lon">Lon</label><input id="f-asset-lon" inputmode="decimal" maxlength="20"></div>
+      <div class="of-field"><label for="f-asset-status">Estado inicial</label>
+        <select id="f-asset-status">
+          <option value="in_service">En servicio</option>
+          <option value="planned">Planificado</option>
+          <option value="standby">En reserva</option>
+        </select>
+      </div>
+    </div>
+    <h4 class="of-section-title" style="margin-top:var(--of-space-4)">Ficha técnica</h4>
+    <div id="asset-attrs"></div>
+    <div class="of-actions" style="margin-top:var(--of-space-4)">
+      <button type="submit" class="of-btn primary">Guardar</button>
+      <button type="button" class="of-btn" id="asset-cancel">Cancelar</button>
+    </div>
+    <p id="asset-form-msg" class="of-status"></p>
+  </form>
+</dialog>
+
+<!-- Diálogo: cambio de estado -->
+<dialog id="status-dialog" class="of-dialog">
+  <h3 class="of-section-title">Cambiar estado</h3>
+  <form id="status-form">
+    <div class="of-filters">
+      <div class="of-field">
+        <label for="st-status">Nuevo estado</label>
+        <select id="st-status"></select>
+      </div>
+      <div class="of-field">
+        <label for="st-reason">Motivo (obligatorio para fuera de servicio / desincorporado)</label>
+        <input id="st-reason" maxlength="500">
+      </div>
+    </div>
+    <div class="of-actions" style="margin-top:var(--of-space-4)">
+      <button type="submit" class="of-btn primary">Aplicar</button>
+      <button type="button" class="of-btn" id="status-cancel">Cancelar</button>
+    </div>
+    <p id="status-form-msg" class="of-status"></p>
+  </form>
+</dialog>
+
+<script type="module" src="/static/js/admin.js"></script>
+</body>
+</html>

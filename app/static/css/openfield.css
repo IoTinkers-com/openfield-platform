@@ -251,6 +251,65 @@ a { color: var(--of-primary); }
 .of-actions { display: flex; flex-wrap: wrap; gap: var(--of-space-2); margin: var(--of-space-3) 0; align-items: center; }
 .of-consent-row { display: flex; align-items: center; gap: var(--of-space-2); flex-wrap: wrap; }
 
+/* Pestañas (panel de administración) */
+.of-tabs { display: flex; gap: var(--of-space-2); flex-wrap: wrap; margin-bottom: var(--of-space-4); border-bottom: 1px solid var(--of-border); }
+.of-tab {
+  font: inherit;
+  padding: var(--of-space-2) var(--of-space-3);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--of-text-muted);
+  cursor: pointer;
+}
+.of-tab.active { color: var(--of-primary-dark); border-bottom-color: var(--of-primary); font-weight: 700; }
+
+/* Diálogos */
+dialog.of-dialog {
+  border: 1px solid var(--of-border);
+  border-radius: var(--of-radius);
+  box-shadow: var(--of-shadow);
+  padding: var(--of-space-4);
+  max-width: 640px;
+  width: calc(100% - 2rem);
+}
+dialog.of-dialog::backdrop { background: rgba(16, 24, 40, 0.4); }
+
+/* Filas del editor de atributos */
+.of-attr-row {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 0.9fr 0.7fr auto auto auto auto auto;
+  gap: var(--of-space-2);
+  align-items: center;
+  padding: var(--of-space-2) 0;
+  border-bottom: 1px dashed var(--of-border);
+  font-size: 0.85rem;
+}
+.of-attr-row input, .of-attr-row select {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--of-radius-sm);
+  border: 1px solid var(--of-border);
+  width: 100%;
+}
+.of-attr-row .of-attr-flag { display: flex; align-items: center; gap: 0.2rem; font-size: 0.75rem; color: var(--of-text-muted); }
+
+/* Progreso de verificación */
+.of-progress { width: 100%; height: 0.7rem; }
+.of-progress-legend { font-size: 0.78rem; color: var(--of-text-muted); }
+
+/* Documento con baja lógica */
+.of-deleted { opacity: 0.5; }
+
+/* Barra de acciones en tablas del admin */
+.of-row-actions { display: flex; gap: var(--of-space-1); flex-wrap: wrap; }
+.of-row-actions .of-btn { padding: 0.3rem 0.55rem; font-size: 0.78rem; }
+
+@media (max-width: 640px) {
+  .of-attr-row { grid-template-columns: 1fr 1fr; }
+  dialog.of-dialog { width: calc(100% - 1rem); }
+}
+
 @media (max-width: 640px) {
   .of-topbar { padding: var(--of-space-2) var(--of-space-3); }
   .of-shell { padding: 0 var(--of-space-2) var(--of-space-4); }

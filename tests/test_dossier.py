@@ -136,3 +136,42 @@ def test_session_dossier_json(client):
 def test_session_dossier_not_found(client):
     r = client.get("/sessions/no-existe")
     assert r.status_code == 404
+
+
+def test_dossier_cache_headers_json_and_html(client):
+    _setup(client)
+    r = client.get("/assets/asset-dossier-001")
+    assert r.headers["vary"] == "Accept"
+    assert r.headers["cache-control"] == "no-store"
+    r2 = client.get("/assets/asset-dossier-001", headers={"Accept": "text/html"})
+    assert r2.headers["vary"] == "Accept"
+    assert r2.headers["cache-control"] == "no-store"
+
+
+def test_dossier_includes_type_history_children(client):
+    import uuid
+    n = uuid.uuid4().hex[:8]
+    atype = f"atype-dossier-{n}"
+    padre = f"asset-dossier-padre-{n}"
+    hijo = f"asset-dossier-hijo-{n}"
+    # tipo + activo padre + hijo vía API de registro
+    client.post("/admin/asset-types", json={
+        "tenant_id": TENANT, "id": atype, "name": "Motor",
+        "attributes": [{"key": "kw", "label": "kW", "type": "number"}],
+    })
+    client.post("/assets", json={
+        "tenant_id": TENANT, "id": padre, "name": "Padre",
+        "asset_type_id": atype, "attributes": {"kw": 5},
+    })
+    client.post("/assets", json={
+        "tenant_id": TENANT, "id": hijo, "name": "Hijo",
+        "asset_type_id": atype, "attributes": {"kw": 3},
+        "parent_id": padre,
+    })
+    r = client.get(f"/assets/{padre}")
+    body = r.json()
+    assert body["asset_type"]["id"] == atype
+    assert body["children"][0]["id"] == hijo
+    assert any(h["action"] == "create" for h in body["history"])
+    r2 = client.get(f"/assets/{hijo}")
+    assert r2.json()["parent"] == {"id": padre, "name": "Padre"}
