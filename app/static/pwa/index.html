@@ -179,7 +179,7 @@ import { webHardware } from "./hardware/web.js";
 import { createDevice, startSession, endSession, captureImage, recordAudio, recordNote } from "./capture.js";
 import { uploadMedia, ingest, transcribeAudio, postVerify, endSessionRemote } from "./sync.js";
 import { newId, now } from "./ids.js";
-import { createIndexedDbStore, blobToStored, storedToBlob } from "./store.js";
+import { createIndexedDbStore, createMemoryStore, blobToStored, storedToBlob } from "./store.js";
 import { createPersistentQueue } from "./queue.js";
 import {
   loadCatalog, searchAssets, tagsByAsset, findAssetByTag,
@@ -191,7 +191,19 @@ import { statusBadge, verificationBadge, attrVerificationBadge, STATUS_LABELS } 
 const BASE_URL = ""; // mismo origen
 const TENANT_ID = "tenant-001";
 const hw = webHardware();
-const store = createIndexedDbStore();
+// Si IndexedDB no está disponible (modo privado, cuota llena, versión previa),
+// la PWA sigue funcionando con un store en memoria y avisa del riesgo.
+let storePersistent = true;
+const store = await (async () => {
+  const s = createIndexedDbStore();
+  try {
+    await s.get("kv", "__probe__");
+    return s;
+  } catch {
+    storePersistent = false;
+    return createMemoryStore();
+  }
+})();
 const queue = createPersistentQueue(store);
 
 let session = null;
@@ -331,6 +343,7 @@ async function refreshCatalog() {
     catalog = await loadCatalog({ baseUrl: BASE_URL, store, tenantId: TENANT_ID });
   } catch (e) {
     log("catálogo: " + e.message);
+    $("catalog-info").textContent = "No se pudo cargar el catálogo: " + e.message;
   }
   renderCatalogInfo();
   renderAssetList();
@@ -987,6 +1000,9 @@ document.addEventListener("visibilitychange", async () => {
 
 updateConnectionBadge();
 renderSteps();
+if (!storePersistent) {
+  setStatus("⚠️ Almacenamiento local no disponible: la cola se perderá al cerrar la página.", "warn");
+}
 renderQueue();
 refreshCatalog();
 </script>

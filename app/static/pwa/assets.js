@@ -202,11 +202,15 @@ export function newFieldAsset({ tenantId, id, identId, type, name, tag, attribut
 
 export async function loadCatalog({ baseUrl = "", store, tenantId, fetchFn = fetch } = {}) {
   const readCache = async () => {
-    const assets = (await store.get("kv", "catalog.assets"))?.value ?? [];
-    const types = (await store.get("kv", "catalog.types"))?.value ?? [];
-    const identifiers = (await store.get("kv", "catalog.identifiers"))?.value ?? [];
-    const updated_at = (await store.get("kv", "catalog.updated_at"))?.value ?? null;
-    return { assets, types, identifiers, fromCache: true, updated_at };
+    try {
+      const assets = (await store.get("kv", "catalog.assets"))?.value ?? [];
+      const types = (await store.get("kv", "catalog.types"))?.value ?? [];
+      const identifiers = (await store.get("kv", "catalog.identifiers"))?.value ?? [];
+      const updated_at = (await store.get("kv", "catalog.updated_at"))?.value ?? null;
+      return { assets, types, identifiers, fromCache: true, updated_at };
+    } catch {
+      return { assets: [], types: [], identifiers: [], fromCache: true, updated_at: null };
+    }
   };
   try {
     const [ra, rt, ri] = await Promise.all([
@@ -219,11 +223,15 @@ export async function loadCatalog({ baseUrl = "", store, tenantId, fetchFn = fet
     const list = Array.isArray(assets) ? assets : assets.items || [];
     const identifiers = ri.ok ? await ri.json() : [];
     const updated_at = new Date().toISOString();
+    // Un fallo de persistencia (IndexedDB no disponible, p. ej. modo privado) no
+    // debe descartar el catálogo ya descargado: se usa en memoria.
     if (store) {
-      await store.put("kv", { key: "catalog.assets", value: list });
-      await store.put("kv", { key: "catalog.types", value: types });
-      await store.put("kv", { key: "catalog.identifiers", value: identifiers });
-      await store.put("kv", { key: "catalog.updated_at", value: updated_at });
+      try {
+        await store.put("kv", { key: "catalog.assets", value: list });
+        await store.put("kv", { key: "catalog.types", value: types });
+        await store.put("kv", { key: "catalog.identifiers", value: identifiers });
+        await store.put("kv", { key: "catalog.updated_at", value: updated_at });
+      } catch { /* seguir con los datos de red */ }
     }
     return { assets: list, types, identifiers, fromCache: false, updated_at };
   } catch (e) {
