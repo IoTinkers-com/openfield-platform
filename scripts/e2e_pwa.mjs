@@ -555,6 +555,21 @@ async function main() {
     await cdp.send("Page.navigate", { url: BASE + "/admin/" }, sid);
     await waitFor("document.querySelector('#new-type-btn')", "panel admin");
     await sleep(1200);
+    const adminHeader = await js(`(() => {
+      const bar = document.querySelector('.of-topbar');
+      const r = bar.getBoundingClientRect();
+      const icons = [...document.querySelectorAll('.of-topnav .of-icon-btn')];
+      return {
+        overflow: bar.scrollWidth - bar.clientWidth,
+        right: Math.round(r.right), vw: window.innerWidth,
+        icons: icons.length,
+        svg: icons.every((a) => !!a.querySelector('svg')),
+        labels: icons.every((a) => (a.getAttribute('aria-label') || '').length > 0),
+      };
+    })()`);
+    check("la cabecera del panel usa iconos SVG y no se desborda",
+      adminHeader.icons === 2 && adminHeader.svg && adminHeader.labels && adminHeader.overflow <= 0,
+      JSON.stringify(adminHeader));
     await click("#new-type-btn");
     await waitFor("document.querySelector('#wizard-root .of-wizard')", "wizard de tipo");
     await fill("#w-name", "Tipo " + RUN);

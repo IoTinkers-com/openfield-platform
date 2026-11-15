@@ -104,6 +104,10 @@ a { color: var(--of-primary); }
   text-decoration: none; font: inherit; font-size: 1.05rem; cursor: pointer;
 }
 .of-icon-btn:hover { border-color: var(--of-primary); }
+.of-icon-btn svg {
+  width: 20px; height: 20px; flex: 0 0 auto;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
 .of-topnav .of-badge { cursor: pointer; }
 .of-nav-label { display: none; font-size: 0.85rem; }
 .of-brand-sub { display: none; }
