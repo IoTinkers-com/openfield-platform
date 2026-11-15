@@ -37,7 +37,7 @@
       <button id="go-settings" class="of-btn">Ajustes</button>
     </div>
     <p class="of-status">Flujo por pantallas: el botón/gesto Atrás del teléfono vuelve al paso anterior.</p>
-    <p class="of-status" id="build">build e6.7</p>
+    <p class="of-status" id="build">build e6.8</p>
   </section>
 
   <!-- Aviso de captura y aceptación (ADR-0026) -->
@@ -89,6 +89,7 @@
     <p id="tray-info" class="of-status"></p>
     <ul id="tray-list" class="of-list"></ul>
     <button id="tray-assign" class="of-btn primary">Asignar a un equipo</button>
+    <button id="tray-clear" class="of-btn danger">Descartar todas</button>
   </section>
 
   <!-- Wizard de asignación (ADR-0027) -->
@@ -1024,6 +1025,8 @@ async function renderTray() {
   }
   $("tray-assign").disabled = !drafts.length;
   $("tray-assign").hidden = !drafts.length;
+  $("tray-clear").disabled = !drafts.length;
+  $("tray-clear").hidden = !drafts.length;
 }
 
 // --- Wizard de asignación de borradores (ADR-0027) ---
@@ -1825,6 +1828,37 @@ async function naFinish(data) {
 
 // --- Acciones sobre ítems de la cola (EC-6 · ADR-0021/0023) ---
 
+// Texto de advertencia al descartar una captura (no se puede deshacer).
+function discardWarning(item) {
+  const when = (item.created_at || "").slice(11, 16);
+  if (item.kind === "media") {
+    const caption = item.doc?.metadata?.caption;
+    return `¿Descartar esta foto${when ? ` de las ${when}` : ""}?` +
+      `${caption ? `\n\nLeyenda: «${caption}»` : ""}\n\nSe perderá la imagen. Esta acción no se puede deshacer.`;
+  }
+  if (item.kind === "audio") {
+    return `¿Descartar esta nota de voz${when ? ` de las ${when}` : ""}?\n\nSe perderá el audio. Esta acción no se puede deshacer.`;
+  }
+  if (item.entity === "observation") {
+    const text = String(item.doc?.value || "").slice(0, 160);
+    return `¿Descartar este comentario${when ? ` de las ${when}` : ""}?` +
+      `${text ? `\n\nTexto: «${text}»` : ""}\n\nSe perderá el comentario. Esta acción no se puede deshacer.`;
+  }
+  if (item.entity === "transcript") {
+    const text = String(item.doc?.text || "").slice(0, 160);
+    return `¿Descartar esta transcripción${when ? ` de las ${when}` : ""}?` +
+      `${text ? `\n\nTexto: «${text}»` : ""}\n\nSe perderá la transcripción. Esta acción no se puede deshacer.`;
+  }
+  return `¿Descartar este elemento?\n\nEsta acción no se puede deshacer.`;
+}
+
+// Refresca las vistas que muestran la cola (bandeja e inicio incluidos).
+async function refreshQueueViews() {
+  await renderQueue();
+  if (router.base === "/bandeja") await renderTray();
+  if (router.base === "/inicio") await renderHome();
+}
+
 function queueItemActions(item) {
   const out = [];
   const mk = (label, title, fn) => {
@@ -1838,21 +1872,23 @@ function queueItemActions(item) {
     b.addEventListener("click", fn);
     return b;
   };
-  const discard = (what) => mk("🗑", `Descartar ${what}`, async () => {
-    if (!confirm(`¿Descartar ${what}?`)) return;
+  const discard = () => mk("🗑", "Descartar", async () => {
+    if (!confirm(discardWarning(item))) return;
     await queue.remove(item.qid);
-    await renderQueue();
+    await refreshQueueViews();
+    setStatus("Captura descartada.", "warn");
   });
 
   if (item.kind === "doc" && (item.entity === "transcript" || item.entity === "observation")) {
     out.push(mk("✎", "Editar texto", () => openQueueEdit(item)));
+    out.push(discard());
   } else if (item.kind === "doc" && item.entity === "asset") {
     out.push(mk("✎", "Editar activo nuevo", () => openQueueEdit(item)));
   } else if (item.kind === "media" || item.kind === "audio") {
-    out.push(discard(item.kind === "media" ? "el medio" : "la nota de voz"));
+    out.push(discard());
   } else if (item.kind === "verify") {
     out.push(mk("🗑", "Deshacer verificación", async () => {
-      if (!confirm("¿Deshacer esta verificación pendiente?")) return;
+      if (!confirm("¿Deshacer esta verificación pendiente?\n\nEl activo volverá a mostrarse como estaba antes de verificarlo.")) return;
       // Revierte la aplicación optimista sobre el catálogo en caché.
       if (item.asset_before) {
         const i = catalog.assets.findIndex((a) => a.id === item.asset_id);
@@ -1864,7 +1900,7 @@ function queueItemActions(item) {
         }
       }
       await queue.remove(item.qid);
-      await renderQueue();
+      await refreshQueueViews();
       renderAssetList();
       setStatus("Verificación deshecha.", "");
     }));
@@ -1911,7 +1947,7 @@ function openQueueEdit(item) {
     }
     await queue.update(item.qid, { doc });
     dlg.close();
-    await renderQueue();
+    await refreshQueueViews();
     renderAssetList(); // el nombre/atributos del activo nuevo se reflejan en el selector
   };
   dlg.showModal();
@@ -2235,6 +2271,20 @@ $("cap-voice").addEventListener("click", () => {
 });
 $("cap-text").addEventListener("click", () => router.navigate("/texto"));
 $("tray-assign").addEventListener("click", () => router.navigate("/asignar"));
+$("tray-clear").addEventListener("click", async () => {
+  const drafts = await draftItems();
+  if (!drafts.length) return;
+  const c = summarize(drafts);
+  const ok = confirm(
+    `¿Descartar las ${drafts.length} capturas de la bandeja?\n\n` +
+    `Se perderán: ${describeCounts(c.drafts)}.\n\nEsta acción no se puede deshacer.`,
+  );
+  if (!ok) return;
+  for (const d of drafts) await queue.remove(d.qid);
+  await refreshQueueViews();
+  setStatus("Bandeja vaciada.", "warn");
+  log(`bandeja vaciada: ${drafts.length} captura(s)`);
+});
 
 $("menu-verify").addEventListener("click", () => router.navigate("/visita/verificar"));
 $("menu-photos").addEventListener("click", () => {

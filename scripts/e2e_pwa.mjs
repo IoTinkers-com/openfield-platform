@@ -485,6 +485,52 @@ async function main() {
     check("la visita cancelada no se envió a la plataforma", sessionsAfter === sessionsBefore,
       `${sessionsBefore} -> ${sessionsAfter} sesiones`);
 
+    // --------------------------------- escenario G: descartar capturas sin asignar
+    const makeDraftPhoto = async () => {
+      await goto("#/inicio");
+      await click("#home-capture");
+      await waitFor("location.hash === '#/capturar'", "capturar");
+      await click("#cap-photo");
+      await waitFor("location.hash === '#/camara'", "cámara");
+      await waitFor("(() => { const v = document.querySelector('#preview'); return v && v.videoWidth > 0; })()", "frames");
+      await click("#cam-shutter");
+      await waitFor("location.hash === '#/camara/confirmar'", "confirmación");
+      await click("#conf-use");
+      await waitFor("location.hash === '#/camara'", "vuelta");
+    };
+    await makeDraftPhoto();
+    await goto("#/inicio");
+    await click("#home-capture");
+    await click("#cap-text");
+    await waitFor("location.hash === '#/texto'", "texto");
+    await fill("#comment", "Comentario para descartar " + RUN);
+    await click("#save-comment");
+    await sleep(600);
+    await goto("#/bandeja");
+    await waitFor("document.querySelectorAll('#tray-list li').length === 2", "dos borradores en la bandeja");
+    const trayButtons = await js(`(() => {
+      const lis = [...document.querySelectorAll('#tray-list li')];
+      return lis.map((li) => li.querySelectorAll('button').length);
+    })()`);
+    check("los borradores de la bandeja tienen acción de descartar", trayButtons.some((n) => n >= 2), JSON.stringify(trayButtons));
+    const dialogsBefore = dialogs.length;
+    await js(`(() => {
+      const li = [...document.querySelectorAll('#tray-list li')].find((x) => /Comentario/.test(x.textContent));
+      const b = li && [...li.querySelectorAll('button')].find((x) => x.textContent.includes('🗑'));
+      if (!b) return false;
+      b.click();
+      return true;
+    })()`);
+    await sleep(800);
+    const warn = dialogs.slice(dialogsBefore).join(" | ");
+    check("descartar una captura advierte que se pierde", /no se puede deshacer/.test(warn), warn.slice(0, 120));
+    await waitFor("document.querySelectorAll('#tray-list li').length === 1", "un borrador tras descartar");
+    check("el borrador descartado desaparece de la bandeja", true);
+    await click("#tray-clear");
+    await waitFor("document.querySelectorAll('#tray-list li').length === 0", "bandeja vacía", 10000);
+    const trayInfo = await text("#tray-info");
+    check("«Descartar todas» vacía la bandeja", /No hay capturas sin asignar/.test(trayInfo || ""), trayInfo);
+
     // ------------------------------------------- escenario E: wizard del panel admin
     await cdp.send("Page.navigate", { url: BASE + "/admin/" }, sid);
     await waitFor("document.querySelector('#new-type-btn')", "panel admin");
