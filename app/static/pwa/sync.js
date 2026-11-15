@@ -50,3 +50,20 @@ export async function endSessionRemote(sessionId, endedAt, baseUrl = "") {
   if (!res.ok) throw new Error(`session-end failed: ${res.status}`);
   return res.json();
 }
+
+// Cambio de estado confirmado en terreno (ADR-0020/0027). `op_id` hace el reintento idempotente.
+export async function postStatus(assetId, { status, reason = null, opId = null, sessionId = null } = {}, baseUrl = "") {
+  const res = await fetch(`${baseUrl}/assets/${encodeURIComponent(assetId)}/status`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      status,
+      reason,
+      op_id: opId,
+      session_id: sessionId,
+      source: "field",
+    }),
+  });
+  if (!res.ok) throw new Error(`status failed: ${res.status}`);
+  return res.json();
+}

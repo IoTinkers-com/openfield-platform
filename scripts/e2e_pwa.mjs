@@ -476,11 +476,24 @@ async function main() {
     await goto("#/visita/verificar");
     await waitFor("document.querySelectorAll('#verify-form .va-confirm').length > 0", "atributos verificables");
     await js("(() => { const b = [...document.querySelectorAll('#verify-form .va-confirm')].find((x) => !x.disabled); if (b) b.click(); return true; })()");
+    // el estado es parte de la ficha: se cambia con un selector y exige motivo
+    await js(`(() => { const s = document.querySelector('#verify-status'); s.value = 'out_of_service'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+    await sleep(150);
+    const reasonVisible = await js("(() => { const r = document.querySelector('#verify-status-reason'); return !!r && !r.hidden; })()");
+    check("cambiar a fuera de servicio pide motivo", Boolean(reasonVisible));
+    await fill("#verify-status-reason", "No arranca (E2E)");
+    const saveLabel = await text("#save-verify");
+    check("el botón resume los cambios pendientes", /estado: En servicio → Fuera de servicio/.test(saveLabel || ""), saveLabel);
     await click("#save-verify");
-    await waitFor("/Verificación encolada/.test(document.querySelector('#status').textContent)", "verificación encolada", 10000);
+    await waitFor("/Encolado: .*estado → Fuera de servicio/.test(document.querySelector('#status').textContent)", "guardado con estado", 10000);
+    check("guardar incluye el cambio de estado en el mismo paso", true);
+    await goto("#/inspeccionar");
+    await waitFor("document.querySelectorAll('#asset-list [data-asset]').length > 0", "lista con estado");
+    const listOut = await text("#asset-list");
+    check("el selector muestra el equipo fuera de servicio", /Fuera de servicio/.test(listOut || ""), (listOut || "").slice(0, 120));
     await goto("#/visita");
     const visitWithVerify = await text("#visit-counts");
-    check("la visita registra la verificación antes de cancelar", /verificación/.test(visitWithVerify || ""), visitWithVerify);
+    check("la visita registra la verificación antes de cancelar", /verificaci/.test(visitWithVerify || ""), visitWithVerify);
     await click("#visit-abort"); // el arnés acepta el confirm automáticamente
     await waitFor("location.hash === '#/inicio'", "inicio tras cancelar", 10000);
     const afterCancel = await js(`({
@@ -489,11 +502,13 @@ async function main() {
       visit: document.querySelector('#home-visit') ? !document.querySelector('#home-visit').hidden : false,
     })`);
     check("cancelar visita avisa y descarta los datos", /Visita cancelada/.test(afterCancel.status) && !afterCancel.tray && !afterCancel.visit, JSON.stringify(afterCancel));
-    check("cancelar revierte la verificación optimista", /revirtieron 1 verificación/.test(afterCancel.status), afterCancel.status);
+    check("cancelar revierte la verificación optimista", /revirtieron 2 verificación/.test(afterCancel.status), afterCancel.status);
     await goto("#/inspeccionar");
     await waitFor("document.querySelectorAll('#asset-list [data-asset]').length > 0", "lista tras cancelar");
     const listAfterCancel = await text("#asset-list");
-    check("el activo vuelve a mostrarse sin verificar en el selector", /0% verificado|Pendiente/.test(listAfterCancel || ""), (listAfterCancel || "").slice(0, 120));
+    check("el activo vuelve a mostrarse sin verificar y en servicio",
+      /0% verificado|Pendiente/.test(listAfterCancel || "") && /En servicio/.test(listAfterCancel || ""),
+      (listAfterCancel || "").slice(0, 120));
     await goto("#/sincronizar");
     await waitFor("document.querySelector('#sync-summary').textContent.length > 10", "resumen tras cancelar");
     const summaryCancel = await text("#sync-summary");

@@ -234,3 +234,20 @@ def test_ingest_asset_with_invalid_attr_422(client):
         "created_at": "2026-11-13T10:00:00Z", "updated_at": None,
     })
     assert r.status_code == 422
+
+def test_status_with_op_id_is_idempotent_and_field_source(client):
+    t = _type(client)
+    doc = _asset(client, t["id"])
+    payload = {"status": "out_of_service", "reason": "no arranca", "op_id": "op-status-1", "source": "field"}
+    r = client.post(f"/assets/{doc['id']}/status", json=payload)
+    assert r.status_code == 200, r.json()
+    assert r.json()["status"] == "out_of_service"
+    again = client.post(f"/assets/{doc['id']}/status", json=payload)
+    assert again.status_code == 200
+    assert again.json()["status"] == "already_applied"
+    hist = client.get(f"/documents/{doc['id']}/history").json()
+    assert hist[0]["action"] == "status"
+    assert hist[0]["source"] == "field"
+    # sin motivo sigue siendo 422
+    bad = client.post(f"/assets/{doc['id']}/status", json={"status": "out_of_service"})
+    assert bad.status_code == 422

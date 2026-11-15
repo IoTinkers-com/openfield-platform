@@ -6,7 +6,7 @@ import { newId, now } from "./ids.js";
 // Sesión a la que pertenece un ítem de la cola (ADR-0027). null = grupo general.
 export function sessionOf(item) {
   if (item.kind === "media") return item.doc?.session_id ?? null;
-  if (item.kind === "audio" || item.kind === "session-end") return item.session_id ?? null;
+  if (item.kind === "audio" || item.kind === "session-end" || item.kind === "status") return item.session_id ?? null;
   if (item.kind === "verify") return item.payload?.session_id ?? null;
   if (item.kind === "doc") return item.doc?.session_id ?? (item.entity === "session" ? item.doc?.id ?? null : null);
   return null;
@@ -21,7 +21,7 @@ export function summarize(items) {
   const bucket = (it) => (it.kind === "media" ? "media"
     : it.kind === "audio" || (it.kind === "doc" && it.entity === "transcript") ? "audio"
       : it.kind === "doc" && it.entity === "observation" ? "notes"
-        : it.kind === "verify" ? "verify" : null);
+        : it.kind === "verify" || it.kind === "status" ? "verify" : null);
   for (const it of items) {
     const b = bucket(it);
     if (it.draft) {

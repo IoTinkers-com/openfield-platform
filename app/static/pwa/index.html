@@ -37,7 +37,7 @@
       <button id="go-settings" class="of-btn">Ajustes</button>
     </div>
     <p class="of-status">Flujo por pantallas: el botón/gesto Atrás del teléfono vuelve al paso anterior.</p>
-    <p class="of-status" id="build">build e6.11</p>
+    <p class="of-status" id="build">build e6.12</p>
   </section>
 
   <!-- Aviso de captura y aceptación (ADR-0026) -->
@@ -173,6 +173,11 @@
     <p id="verify-progress-text" class="of-status"></p>
     <div id="verify-form"></div>
     <div class="of-field">
+      <label for="verify-status">Estado del equipo</label>
+      <select id="verify-status"></select>
+      <input id="verify-status-reason" maxlength="500" placeholder="Motivo (obligatorio para fuera de servicio o desincorporado)" hidden>
+    </div>
+    <div class="of-field">
       <label for="verify-note">Nota de verificación</label>
       <textarea id="verify-note" rows="2" maxlength="2000"></textarea>
     </div>
@@ -279,7 +284,7 @@
 // Sirve el repo raíz (p. ej. `python -m http.server`) y abre /public/.
 import { webHardware } from "./hardware/web.js";
 import { createDevice, startSession, endSession, captureImage, recordAudio, recordNote, photoMetadata } from "./capture.js";
-import { uploadMedia, ingest, transcribeAudio, postVerify, endSessionRemote } from "./sync.js";
+import { uploadMedia, ingest, transcribeAudio, postVerify, endSessionRemote, postStatus } from "./sync.js";
 import { newId, now } from "./ids.js";
 import { createIndexedDbStore, createMemoryStore, blobToStored, storedToBlob } from "./store.js";
 import { createPersistentQueue, sessionOf, summarize } from "./queue.js";
@@ -299,7 +304,7 @@ import {
   parseValue, applyVerificationLocally,
   buildVerifyPayload, newFieldAsset, relevantAttrs, activeAttrs,
 } from "./assets.js";
-import { statusBadge, verificationBadge, attrVerificationBadge, photoCategoriesFor, photoCategoryLabel } from "./labels.js";
+import { statusBadge, verificationBadge, attrVerificationBadge, STATUS_LABELS, photoCategoriesFor, photoCategoryLabel } from "./labels.js";
 
 const BASE_URL = "";
 const TENANT_ID = "tenant-001";
@@ -800,7 +805,7 @@ async function closeCurrentVisit() {
 // Antes de borrar, revierte los efectos optimistas (verificaciones) de esa visita y,
 // si hay conexión, vuelve a leer el catálogo del servidor.
 async function revertOptimisticEffects(items) {
-  const verifies = items.filter((i) => i.kind === "verify" && i.asset_before);
+  const verifies = items.filter((i) => (i.kind === "verify" || i.kind === "status") && i.asset_before);
   if (!verifies.length) return 0;
   let reverted = 0;
   for (const it of verifies) {
@@ -1192,6 +1197,46 @@ async function asgFinish(data) {
 // --- Verificación de ficha ---
 
 const pendingResults = new Map(); // key -> {action, value?}
+const STATUS_OPTIONS = ["planned", "in_service", "standby", "out_of_service", "decommissioned"];
+const STATUS_REASON_REQUIRED = ["out_of_service", "decommissioned"];
+let pendingStatus = null; // { status, reason }
+let statusOriginal = "in_service"; // estado con el que se abrió la ficha
+
+// El estado es parte de la ficha: se muestra preseleccionado y se puede cambiar.
+function renderStatusPicker() {
+  if (!currentAsset) return;
+  const sel = $("verify-status");
+  sel.innerHTML = STATUS_OPTIONS.map((k) => `<option value="${k}">${STATUS_LABELS[k]}</option>`).join("");
+  statusOriginal = STATUS_LABELS[currentAsset.status] ? currentAsset.status : "in_service";
+  sel.value = statusOriginal;
+  const reason = $("verify-status-reason");
+  reason.value = currentAsset.status_reason || "";
+  reason.hidden = !STATUS_REASON_REQUIRED.includes(sel.value);
+  pendingStatus = null;
+  updateSaveLabel();
+}
+
+function refreshStatusChange() {
+  const sel = $("verify-status");
+  const reason = $("verify-status-reason");
+  const next = sel.value;
+  const needReason = STATUS_REASON_REQUIRED.includes(next);
+  reason.hidden = !needReason;
+  pendingStatus = next === statusOriginal ? null : { status: next, reason: reason.value.trim() || null };
+  updateSaveLabel();
+}
+
+// El botón dice exactamente qué se va a guardar.
+function updateSaveLabel() {
+  const parts = [];
+  if (pendingResults.size) parts.push(`${pendingResults.size} atributo${pendingResults.size === 1 ? "" : "s"}`);
+  if (pendingStatus) {
+    parts.push(`estado: ${STATUS_LABELS[statusOriginal] || statusOriginal} → ${STATUS_LABELS[pendingStatus.status]}`);
+  }
+  if ($("verify-note").value.trim()) parts.push("nota");
+  if ($("asset-not-found").checked) parts.push("activo no encontrado");
+  $("save-verify").textContent = parts.length ? `Guardar cambios: ${parts.join(" · ")}` : "Guardar verificación";
+}
 
 function renderVerifyForm() {
   if (!currentAsset) return;
@@ -1221,6 +1266,7 @@ function renderVerifyForm() {
     </div>`;
   }).join("") || `<p class="of-status">El tipo de este activo no define atributos verificables.</p>`;
   updateVerifyProgress();
+  renderStatusPicker();
 }
 
 function updateVerifyProgress() {
@@ -1232,8 +1278,14 @@ function updateVerifyProgress() {
 async function saveVerification() {
   if (!currentAsset) return;
   const assetNotFound = $("asset-not-found").checked;
+  const note = $("verify-note").value.trim() || null;
   const results = [...pendingResults.entries()].map(([key, r]) => ({ key, ...r }));
-  if (!assetNotFound && !results.length && !$("verify-note").value.trim()) {
+  if (pendingStatus && STATUS_REASON_REQUIRED.includes(pendingStatus.status) && !pendingStatus.reason) {
+    setStatus(`⚠️ El estado «${STATUS_LABELS[pendingStatus.status]}» exige un motivo.`, "warn");
+    $("verify-status-reason").focus();
+    return;
+  }
+  if (!assetNotFound && !results.length && !note && !pendingStatus) {
     setStatus("⚠️ Nada que guardar: confirma, corrige o marca atributos primero.", "warn");
     return;
   }
@@ -1248,28 +1300,57 @@ async function saveVerification() {
     setStatus("❌ " + e.message, "danger");
     return;
   }
-  const qid = newId("op");
-  const payload = buildVerifyPayload({
-    opId: qid,
-    sessionId: session?.id || null,
-    results,
-    assetNotFound,
-    note: $("verify-note").value.trim() || null,
-  });
   // Copia previa del activo para poder deshacer la verificación optimista (EC-6).
   const asset_before = JSON.parse(JSON.stringify(currentAsset));
-  await queue.enqueue({ kind: "verify", asset_id: currentAsset.id, payload, asset_before });
+  if (results.length || assetNotFound || note) {
+    const qid = newId("op");
+    const payload = buildVerifyPayload({
+      opId: qid,
+      sessionId: session?.id || null,
+      results,
+      assetNotFound,
+      note,
+    });
+    await queue.enqueue({ kind: "verify", asset_id: currentAsset.id, payload, asset_before });
+    try {
+      applyVerificationLocally(currentAsset, type, payload);
+    } catch (e) {
+      log("verificación local: " + e.message);
+    }
+  }
+  // Cambio de estado: se encola aparte y se aplica de forma optimista.
+  let statusApplied = null;
+  if (pendingStatus) {
+    await queue.enqueue({
+      kind: "status",
+      asset_id: currentAsset.id,
+      session_id: session?.id || null,
+      status: pendingStatus.status,
+      reason: pendingStatus.reason,
+      op_id: newId("op"),
+      asset_before: JSON.parse(JSON.stringify(currentAsset)),
+    });
+    currentAsset.status = pendingStatus.status;
+    currentAsset.status_reason = pendingStatus.reason;
+    currentAsset.status_changed_at = now();
+    currentAsset.updated_at = now();
+    statusApplied = pendingStatus;
+  }
   try {
-    applyVerificationLocally(currentAsset, type, payload);
     await store.put("kv", { key: "catalog.assets", value: catalog.assets });
   } catch (e) {
-    log("verificación local: " + e.message);
+    log("catálogo local: " + e.message);
   }
   $("asset-not-found").checked = false;
   $("verify-note").value = "";
-  setStatus("✅ Verificación encolada; se enviará al sincronizar.", "ok");
-  log("verificación encolada: " + currentAsset.id);
+  const applied = [];
+  if (results.length) applied.push(`${results.length} atributo(s)`);
+  if (statusApplied) applied.push(`estado → ${STATUS_LABELS[statusApplied.status]}`);
+  if (note) applied.push("nota");
+  setStatus(`✅ Encolado: ${applied.join(", ")}. Se enviará al sincronizar.`, "ok");
+  log("verificación encolada: " + currentAsset.id + (statusApplied ? ` (estado ${statusApplied.status})` : ""));
   renderVerifyForm();
+  renderAssetList();
   await renderQueue();
 }
 
@@ -1891,6 +1972,23 @@ function queueItemActions(item) {
     out.push(mk("✎", "Editar activo nuevo", () => openQueueEdit(item)));
   } else if (item.kind === "media" || item.kind === "audio") {
     out.push(discard());
+  } else if (item.kind === "status") {
+    out.push(mk("🗑", "Deshacer cambio de estado", async () => {
+      if (!confirm("¿Deshacer este cambio de estado pendiente?\n\nEl activo volverá a su estado anterior.")) return;
+      if (item.asset_before) {
+        const i = catalog.assets.findIndex((a) => a.id === item.asset_id);
+        if (i >= 0) catalog.assets[i] = item.asset_before;
+        await store.put("kv", { key: "catalog.assets", value: catalog.assets });
+        if (currentAsset?.id === item.asset_id) {
+          currentAsset = item.asset_before;
+          renderVerifyForm();
+        }
+      }
+      await queue.remove(item.qid);
+      await refreshQueueViews();
+      renderAssetList();
+      setStatus("Cambio de estado deshecho.", "");
+    }));
   } else if (item.kind === "verify") {
     out.push(mk("🗑", "Deshacer verificación", async () => {
       if (!confirm("¿Deshacer esta verificación pendiente?\n\nEl activo volverá a mostrarse como estaba antes de verificarlo.")) return;
@@ -1992,6 +2090,13 @@ async function syncItem(item) {
     }
   } else if (item.kind === "verify") {
     await postVerify(item.asset_id, item.payload, BASE_URL);
+  } else if (item.kind === "status") {
+    await postStatus(item.asset_id, {
+      status: item.status,
+      reason: item.reason,
+      opId: item.op_id,
+      sessionId: item.session_id,
+    }, BASE_URL);
   } else if (item.kind === "session-end") {
     await endSessionRemote(item.session_id, item.ended_at, BASE_URL);
   } else {
@@ -2345,6 +2450,7 @@ $("verify-form").addEventListener("click", (e) => {
     if (input) input.hidden = !input.hidden;
     if (input && !input.hidden) input.focus();
   }
+  updateSaveLabel();
 });
 $("verify-form").addEventListener("input", (e) => {
   if (!e.target.classList.contains("va-input")) return;
@@ -2352,7 +2458,12 @@ $("verify-form").addEventListener("input", (e) => {
   const v = e.target.value;
   if (v === "" || v === null) pendingResults.delete(key);
   else pendingResults.set(key, { action: "correct", value: v });
+  updateSaveLabel();
 });
+$("verify-status").addEventListener("change", refreshStatusChange);
+$("verify-status-reason").addEventListener("input", refreshStatusChange);
+$("verify-note").addEventListener("input", updateSaveLabel);
+$("asset-not-found").addEventListener("change", updateSaveLabel);
 $("save-verify").addEventListener("click", saveVerification);
 $("goto-plate").addEventListener("click", () => {
   presetCategory = "placa";

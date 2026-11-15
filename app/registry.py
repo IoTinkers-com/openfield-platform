@@ -142,6 +142,9 @@ class StatusIn(BaseModel):
 
     status: StatusCode
     reason: str | None = Field(default=None, max_length=500)
+    op_id: str | None = Field(default=None, max_length=100)
+    session_id: str | None = Field(default=None, max_length=80)
+    source: Literal["manual", "field"] = "manual"
 
 
 class VerifyResultIn(BaseModel):
@@ -747,6 +750,8 @@ def update_asset(asset_id: str, payload: AssetPatch, db: Session = Depends(get_d
 @router.post("/assets/{asset_id}/status")
 def change_status(asset_id: str, payload: StatusIn, db: Session = Depends(get_db)):
     row = _get_asset(db, asset_id)
+    if payload.op_id and op_applied(db, payload.op_id):
+        return {"status": "already_applied", "asset": row.body}
     asset = copy.deepcopy(row.body)
     assert_transition(asset.get("status"), payload.status, payload.reason)
     now = utcnow_iso()
@@ -759,7 +764,13 @@ def change_status(asset_id: str, payload: StatusIn, db: Session = Depends(get_db
         asset["decommissioned_at"] = now
     asset["updated_at"] = now
     save_update(
-        db, row, asset, action="status", source="manual", reason=payload.reason
+        db,
+        row,
+        asset,
+        action="status",
+        source=payload.source,
+        reason=payload.reason,
+        op_id=payload.op_id,
     )
     db.commit()
     return row.body
