@@ -335,6 +335,12 @@ a { color: var(--of-primary); }
   padding: 0.15rem 0.6rem; font-size: 0.8rem; font-weight: 700;
 }
 
+/* Banner de visita en curso (ADR-0027) */
+.of-visit-banner {
+  position: sticky; top: 0; z-index: 40; padding: 0.4rem 0.75rem;
+  background: var(--of-primary); color: #fff; font-size: 0.85rem; cursor: pointer;
+}
+
 /* Pestañas (panel de administración) */
 .of-tabs { display: flex; gap: var(--of-space-2); flex-wrap: wrap; margin-bottom: var(--of-space-4); border-bottom: 1px solid var(--of-border); }
 .of-tab {

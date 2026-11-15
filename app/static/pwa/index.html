@@ -22,14 +22,16 @@
 <main class="of-shell">
   <div id="status" class="of-status"></div>
   <div id="rec-indicator" class="of-rec" hidden>● Grabando</div>
+  <div id="visit-banner" class="of-visit-banner" hidden></div>
 
   <!-- Inicio: puerta de entrada -->
   <section data-screen="/inicio" class="of-card">
     <h2 class="of-section-title">Captura en terreno</h2>
     <p id="consent-state-home" class="of-status"></p>
-    <div class="of-actions">
-      <button id="go-assets" class="of-btn primary">Elegir activo</button>
-      <button id="go-queue" class="of-btn">Ver cola</button>
+    <button id="home-visit" class="of-card-option primary" hidden></button>
+    <div class="of-actions" style="flex-direction:column; align-items:stretch">
+      <button id="go-assets" class="of-btn primary">Inspeccionar equipo</button>
+      <button id="go-queue" class="of-btn">Por sincronizar</button>
       <button id="go-settings" class="of-btn">Ajustes</button>
     </div>
     <p class="of-status">Flujo por pantallas: el botón/gesto Atrás del teléfono vuelve al paso anterior.</p>
@@ -70,7 +72,7 @@
   </section>
 
   <!-- Selector de activo -->
-  <section data-screen="/activos" class="of-card" hidden>
+  <section data-screen="/inspeccionar" class="of-card" hidden>
     <h2 class="of-section-title">Activo</h2>
     <div class="of-field">
       <input id="asset-search" type="search" placeholder="Buscar por nombre, TAG o ubicación" maxlength="100">
@@ -85,12 +87,12 @@
   </section>
 
   <!-- Alta de activo en terreno (wizard, ADR-0025) -->
-  <section data-screen="/activos/nuevo" class="of-card" hidden>
+  <section data-screen="/equipos/nuevo" class="of-card" hidden>
     <div id="na-root"></div>
   </section>
 
   <!-- Escaneo de QR -->
-  <section data-screen="/activos/qr" class="of-card" hidden>
+  <section data-screen="/inspeccionar/qr" class="of-card" hidden>
     <h2 class="of-section-title">Escanear QR / TAG</h2>
     <video id="qr-video" class="of-capture-video" autoplay playsinline muted></video>
     <p id="qr-status" class="of-status">Apunta la cámara al código…</p>
@@ -100,19 +102,43 @@
   </section>
 
   <!-- Menú del activo -->
-  <section data-screen="/activo" class="of-card" hidden>
+  <section data-screen="/visita" class="of-card" hidden>
     <h2 class="of-section-title" id="asset-title"></h2>
+    <p id="visit-counts" class="of-status"></p>
+    <button id="visit-next" class="of-card-option primary" style="font-weight:700">Terminar visita</button>
     <div class="of-actions" style="flex-direction:column; align-items:stretch">
-      <button id="menu-verify" class="of-btn primary">✓ Verificar ficha</button>
+      <button id="menu-verify" class="of-btn">✓ Verificar ficha</button>
       <button id="menu-photos" class="of-btn">📷 Fotos</button>
       <button id="menu-voice" class="of-btn">🎙️ Nota de voz</button>
       <button id="menu-comment" class="of-btn">💬 Comentario</button>
-      <button id="end-session" class="of-btn danger">Terminar sesión</button>
+      <button id="end-session" class="of-btn danger">Terminar visita</button>
+    </div>
+  </section>
+
+  <!-- Resumen y cierre de la visita (ADR-0027) -->
+  <section data-screen="/visita/cerrar" class="of-card" hidden>
+    <h2 class="of-section-title">Cerrar visita</h2>
+    <div id="close-summary"></div>
+    <div id="close-thumbs" class="of-gallery" style="margin-top:var(--of-space-3)"></div>
+    <div class="of-actions">
+      <button id="close-confirm" class="of-btn primary">Confirmar cierre</button>
+      <button id="close-cancel" class="of-btn">Volver</button>
+    </div>
+  </section>
+
+  <!-- Visita cerrada -->
+  <section data-screen="/visita/cerrada" class="of-card" hidden>
+    <h2 class="of-section-title">Visita cerrada ✓</h2>
+    <p id="closed-summary" class="of-status"></p>
+    <div class="of-actions" style="flex-direction:column; align-items:stretch">
+      <button id="closed-next" class="of-btn primary">Siguiente equipo</button>
+      <button id="closed-sync" class="of-btn">Sincronizar ahora</button>
+      <button id="closed-home" class="of-btn">Inicio</button>
     </div>
   </section>
 
   <!-- Verificación de ficha -->
-  <section data-screen="/activo/verificar" class="of-card" hidden>
+  <section data-screen="/visita/verificar" class="of-card" hidden>
     <h2 class="of-section-title">Verificar ficha</h2>
     <progress id="verify-progress" max="100" value="0" style="width:100%"></progress>
     <p id="verify-progress-text" class="of-status"></p>
@@ -129,7 +155,7 @@
   </section>
 
   <!-- Cámara a pantalla completa -->
-  <section data-screen="/activo/camara" class="of-cam" hidden>
+  <section data-screen="/camara" class="of-cam" hidden>
     <video id="preview" autoplay playsinline muted></video>
     <div class="of-cam-top">
       <button id="cam-back" class="of-cam-btn" type="button" title="Volver">✕</button>
@@ -152,7 +178,7 @@
   </section>
 
   <!-- Confirmación de foto -->
-  <section data-screen="/activo/camara/confirmar" class="of-conf" hidden>
+  <section data-screen="/camara/confirmar" class="of-conf" hidden>
     <img id="conf-img" alt="Foto capturada">
     <div class="of-conf-panel">
       <div class="of-field">
@@ -167,7 +193,7 @@
   </section>
 
   <!-- Nota de voz -->
-  <section data-screen="/activo/voz" class="of-card" hidden>
+  <section data-screen="/voz" class="of-card" hidden>
     <h2 class="of-section-title">Nota de voz</h2>
     <div class="of-actions">
       <button id="rec-toggle" class="of-btn">● Grabar nota de voz</button>
@@ -186,7 +212,7 @@
   </section>
 
   <!-- Comentario -->
-  <section data-screen="/activo/comentario" class="of-card" hidden>
+  <section data-screen="/texto" class="of-card" hidden>
     <h2 class="of-section-title">Comentario</h2>
     <div class="of-field">
       <label for="comment">Comentario (teclado / dictado del teclado)</label>
@@ -196,7 +222,7 @@
   </section>
 
   <!-- Cola de sincronización -->
-  <section data-screen="/cola" class="of-card" hidden>
+  <section data-screen="/sincronizar" class="of-card" hidden>
     <h2 class="of-section-title">Cola de sincronización</h2>
     <ul id="queue-list" class="of-list"></ul>
     <div class="of-actions" style="justify-content: space-between;">
@@ -224,7 +250,11 @@ import { createDevice, startSession, endSession, captureImage, recordAudio, reco
 import { uploadMedia, ingest, transcribeAudio, postVerify, endSessionRemote } from "./sync.js";
 import { newId, now } from "./ids.js";
 import { createIndexedDbStore, createMemoryStore, blobToStored, storedToBlob } from "./store.js";
-import { createPersistentQueue } from "./queue.js";
+import { createPersistentQueue, sessionOf, summarize } from "./queue.js";
+import {
+  currentVisit, closedVisits, openVisit, closeVisit, markSynced, staleVisit,
+  assignDrafts, nearbyAssets, legacyVisits, describeCounts, sumCounts,
+} from "./visits.js";
 import { createRouter } from "./router.js";
 import { createWizard, saveDraft, loadDraft, clearDraft } from "./wizard.js";
 import { mountWizard } from "./wizard-ui.js";
@@ -276,6 +306,8 @@ let qrActive = false;
 let syncing = false;
 let consent = null;         // consent-record vigente (ADR-0026)
 let consentReturn = null;   // ruta pedida antes de pasar por el aviso
+let visits = [];            // registro local de visitas (ADR-0027)
+let lastClosed = null;      // última visita cerrada (para /visita/cerrada)
 const deviceId = localStorage.getItem("of.deviceId") || newId("dev");
 localStorage.setItem("of.deviceId", deviceId);
 
@@ -368,9 +400,21 @@ window.addEventListener("offline", updateConnectionBadge);
 async function renderQueue() {
   const items = await queue.list();
   const badge = $("queue-badge");
-  $("sync").textContent = items.length ? `⤒ Sincronizar (${items.length})` : "⤒ Sincronizar";
-  badge.textContent = items.length ? `${items.length} pendiente${items.length === 1 ? "" : "s"}` : "Sin pendientes";
-  badge.className = "of-badge " + (items.length ? "warn" : "ok");
+  const closed = closedVisits(visits).length;
+  const drafts = summarize(items).drafts.total;
+  $("sync").textContent = items.filter((i) => !i.draft).length
+    ? `⤒ Sincronizar (${items.filter((i) => !i.draft).length})`
+    : "⤒ Sincronizar";
+  if (closed) {
+    badge.textContent = `${closed} visita${closed === 1 ? "" : "s"} por sincronizar`;
+    badge.className = "of-badge warn";
+  } else if (drafts) {
+    badge.textContent = `${drafts} captura${drafts === 1 ? "" : "s"} sin asignar`;
+    badge.className = "of-badge warn";
+  } else {
+    badge.textContent = "Sin pendientes";
+    badge.className = "of-badge ok";
+  }
   const KIND_LABELS = {
     doc: "Documento", media: "Foto/medio", audio: "Nota de voz",
     verify: "Verificación", "session-end": "Cierre de sesión",
@@ -447,69 +491,193 @@ async function refreshCatalog() {
   renderAssetList();
 }
 
-// --- Sesiones por activo ---
+// --- Visitas de captura (ADR-0027): 1 visita = 1 sesión = 1 equipo ---
 
-async function persistSession() {
+async function loadVisits() {
   try {
-    if (session) await store.put("kv", { key: "ui.session", value: session });
-    if (currentAsset) await store.put("kv", { key: "ui.currentAssetId", value: currentAsset.id });
-  } catch (e) { log("persistencia de sesión: " + e.message); }
-}
-
-async function clearPersistedSession() {
-  try {
-    await store.delete("kv", "ui.session");
-    await store.delete("kv", "ui.currentAssetId");
-  } catch (_) { /* best effort */ }
-}
-
-async function closeSessionIfOpen() {
-  if (!session) return;
-  const ended = endSession(session);
-  await queue.enqueue({ kind: "session-end", session_id: ended.id, ended_at: ended.ended_at });
-  session = null;
-  await clearPersistedSession();
-  log("sesión cerrada y encolada");
-}
-
-async function openAssetSession(asset) {
-  if (session && session.asset_id !== asset.id) await closeSessionIfOpen();
-  if (!session) {
-    session = await startSession(
-      {
-        deviceId,
-        assetId: asset.id,
-        operator: $("operator").value || "operador",
-        consent: consent ? sessionConsentRef(consent) : null,
-      },
-      hw,
-    );
-    await queue.enqueue({ kind: "doc", entity: "device", doc: createDevice(deviceId, hw) });
-    await queue.enqueue({ kind: "doc", entity: "session", doc: session });
-    log("sesión iniciada: " + session.id + " → " + asset.name);
+    const rec = await store.get("kv", "visits");
+    visits = Array.isArray(rec?.value) ? rec.value : [];
+  } catch (e) {
+    visits = [];
+    log("visitas: " + e.message);
   }
-  await persistSession();
+  return visits;
+}
+
+async function saveVisits() {
+  try {
+    await store.put("kv", { key: "visits", value: visits });
+  } catch (e) { log("persistencia de visitas: " + e.message); }
+}
+
+function visitAsset(visit) {
+  return catalog.assets.find((a) => a.id === visit.asset_id) || { id: visit.asset_id, name: visit.asset_name || visit.asset_id };
+}
+
+// La sesión y el activo actuales se derivan siempre de la visita abierta.
+function syncCurrentFromVisit() {
+  const v = currentVisit(visits);
+  if (v) {
+    session = v.session;
+    currentAsset = visitAsset(v);
+  } else {
+    session = null;
+    currentAsset = null;
+  }
+  return v;
+}
+
+async function openVisitFor(asset) {
+  session = await startSession(
+    {
+      deviceId,
+      assetId: asset.id,
+      operator: $("operator").value || "operador",
+      consent: consent ? sessionConsentRef(consent) : null,
+    },
+    hw,
+  );
+  await queue.enqueue({ kind: "doc", entity: "device", doc: createDevice(deviceId, hw) });
+  await queue.enqueue({ kind: "doc", entity: "session", doc: session });
+  visits = openVisit(visits, { session, asset });
+  await saveVisits();
+  syncCurrentFromVisit();
+  log("visita iniciada: " + session.id + " → " + asset.name);
 }
 
 async function selectAsset(asset) {
-  currentAsset = asset;
-  await openAssetSession(asset);
+  const open = currentVisit(visits);
+  if (open && open.asset_id !== asset.id) {
+    setStatus(`⚠️ Tienes una visita abierta en ${open.asset_name}: ciérrala para continuar.`, "warn");
+    router.navigate("/visita/cerrar");
+    return;
+  }
+  if (!open) await openVisitFor(asset);
   await renderQueue();
-  router.navigate("/activo");
+  router.navigate("/visita");
+}
+
+async function closeCurrentVisit() {
+  const v = currentVisit(visits);
+  if (!v) return null;
+  const ended = endSession(v.session);
+  await queue.enqueue({ kind: "session-end", session_id: ended.id, ended_at: ended.ended_at });
+  visits = closeVisit(visits, v.id, ended.ended_at);
+  await saveVisits();
+  lastClosed = visits.find((x) => x.id === v.id) || null;
+  syncCurrentFromVisit();
+  log("visita cerrada: " + v.id);
+  return lastClosed;
 }
 
 async function renderAssetMenu() {
-  if (!currentAsset) return;
+  const v = currentVisit(visits);
+  if (!v || !currentAsset) return;
   $("asset-title").innerHTML = `${currentAsset.name} ${statusBadge(currentAsset.status)} ${verificationBadge(currentAsset.verification_status)}`;
-  const n = await photosPending();
-  $("menu-photos").textContent = `📷 Fotos${n ? ` (${n})` : ""}`;
+  const items = await queue.list();
+  const own = items.filter((i) => !i.draft && sessionOf(i) === v.id);
+  const c = summarize(own).sessions[v.id] || { media: 0, audio: 0, notes: 0, verify: 0, total: 0 };
+  $("visit-counts").textContent = `Visita iniciada ${(v.started_at || "").slice(11, 16)} · ${describeCounts(c)}`;
+  $("menu-photos").textContent = `📷 Fotos${c.media ? ` (${c.media})` : ""}`;
+  $("menu-voice").textContent = `🎙️ Nota de voz${c.audio ? ` (${c.audio})` : ""}`;
+  $("menu-comment").textContent = `💬 Comentario${c.notes ? ` (${c.notes})` : ""}`;
   $("cam-asset-name").textContent = currentAsset.name;
+  // Siguiente paso sugerido: verificar lo pendiente, luego la placa, luego cerrar.
+  const pct = assetProgress(currentAsset);
+  const type = catalog.types.find((t) => t.id === currentAsset.asset_type_id);
+  const hasAttrs = type ? relevantAttrs(type).length > 0 : false;
+  let suggestion = "Terminar visita";
+  let target = "/visita/cerrar";
+  if (hasAttrs && pct < 100) {
+    suggestion = `Verificar ficha (${pct}% hecho)`;
+    target = "/visita/verificar";
+  } else if (!c.media) {
+    suggestion = "Tomar foto de la placa";
+    target = "/camara";
+  }
+  $("visit-next").textContent = suggestion;
+  $("visit-next").dataset.target = target;
 }
 
 async function photosPending() {
-  if (!session) return 0;
+  const v = currentVisit(visits);
+  if (!v) return 0;
   const items = await queue.list();
-  return items.filter((i) => i.kind === "media" && i.doc?.session_id === session.id).length;
+  return items.filter((i) => i.kind === "media" && i.doc?.session_id === v.id).length;
+}
+
+// Banner de visita en curso (ADR-0027).
+const NO_BANNER = ["/camara", "/camara/confirmar", "/inspeccionar/qr", "/visita", "/visita/verificar", "/visita/cerrar", "/visita/cerrada", "/consentimiento"];
+
+async function renderBanner(path = router.current) {
+  const el = $("visit-banner");
+  const v = currentVisit(visits);
+  if (!v || NO_BANNER.includes(path)) {
+    el.hidden = true;
+    return;
+  }
+  const items = await queue.list();
+  const c = summarize(items.filter((i) => !i.draft && sessionOf(i) === v.id)).sessions[v.id] || { media: 0, audio: 0, notes: 0, verify: 0, total: 0 };
+  const minutes = Math.max(0, Math.round((Date.now() - Date.parse(v.started_at)) / 60000));
+  el.textContent = `● Visita en curso · ${v.asset_name} · ${minutes} min · ${describeCounts(c)}`;
+  el.hidden = false;
+}
+
+// Hub de inicio: visita en curso y visitas por sincronizar (ADR-0027).
+async function renderHome() {
+  const v = currentVisit(visits);
+  const card = $("home-visit");
+  card.hidden = !v;
+  if (v) card.textContent = `▶ Continuar visita: ${v.asset_name}`;
+  const closed = closedVisits(visits).length;
+  $("go-queue").textContent = closed
+    ? `Por sincronizar (${closed} visita${closed === 1 ? "" : "s"})`
+    : "Por sincronizar";
+  renderConsentState();
+}
+
+// Resumen de cierre con miniaturas (ADR-0027).
+let closeThumbUrls = [];
+
+function revokeCloseThumbs() {
+  for (const u of closeThumbUrls) URL.revokeObjectURL(u);
+  closeThumbUrls = [];
+  $("close-thumbs").innerHTML = "";
+}
+
+async function renderCloseSummary() {
+  const v = currentVisit(visits);
+  if (!v) return;
+  const items = (await queue.list()).filter((i) => !i.draft && sessionOf(i) === v.id);
+  const c = summarize(items).sessions[v.id] || { media: 0, audio: 0, notes: 0, verify: 0, total: 0 };
+  const pct = assetProgress(visitAsset(v));
+  const minutes = Math.max(0, Math.round((Date.now() - Date.parse(v.started_at)) / 60000));
+  $("close-summary").innerHTML = `<div class="of-card">
+    <p><strong>${escapeHtml(v.asset_name)}</strong></p>
+    <p>Inicio ${escapeHtml((v.started_at || "").slice(11, 16))} · ${minutes} min</p>
+    <p>${escapeHtml(describeCounts(c))}</p>
+    <p>${pct}% de la ficha verificado</p>
+    ${c.total === 0 ? '<p class="of-status">No hay capturas en esta visita.</p>' : ""}
+  </div>`;
+  revokeCloseThumbs();
+  const photos = items.filter((i) => i.kind === "media" && i.blob).slice(0, 12);
+  for (const p of photos) {
+    const url = URL.createObjectURL(storedToBlob(p.blob));
+    closeThumbUrls.push(url);
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = p.doc?.id || "foto";
+    img.loading = "lazy";
+    $("close-thumbs").appendChild(img);
+  }
+}
+
+async function renderClosedScreen() {
+  if (!lastClosed) return;
+  const items = (await queue.list()).filter((i) => !i.draft && sessionOf(i) === lastClosed.id);
+  const c = summarize(items).sessions[lastClosed.id] || { media: 0, audio: 0, notes: 0, verify: 0, total: 0 };
+  $("closed-summary").textContent =
+    `${lastClosed.asset_name} · ${describeCounts(c)} · cerrada ${(lastClosed.ended_at || "").slice(11, 16)}`;
 }
 
 // --- Verificación de ficha ---
@@ -623,7 +791,7 @@ async function openCameraScreen() {
   } catch (e) {
     setStatus("❌ " + friendlyError(e), "danger");
     log("cámara no disponible: " + e.message);
-    router.navigate("/activo");
+    router.navigate("/visita");
   }
 }
 
@@ -695,7 +863,7 @@ async function shutter() {
       fix: lastFix,
       cameraLabel: cam.label || "",
     };
-    router.navigate("/activo/camara/confirmar");
+    router.navigate("/camara/confirmar");
   } catch (e) {
     setStatus("❌ " + friendlyError(e), "danger");
     log("error al capturar: " + e.message);
@@ -749,12 +917,12 @@ async function usePhoto() {
   const acc = fix?.accuracy != null ? Math.round(fix.accuracy) : null;
   setStatus(acc && acc > 100 ? "⚠️ Ubicación aproximada; activa 'Ubicación precisa' en Ajustes." : "✅ Foto encolada.", acc && acc > 100 ? "warn" : "ok");
   log("foto encolada: " + doc.id + (fix ? ` (GPS${acc ? " ±" + acc + " m" : ""})` : " (ubicación del activo)"));
-  router.navigate("/activo/camara");
+  router.navigate("/camara");
 }
 
 function retryPhoto() {
   pendingPhoto = null;
-  router.navigate("/activo/camara");
+  router.navigate("/camara");
 }
 
 // --- Nota de voz iniciar/detener (ADR-0023) ---
@@ -928,7 +1096,7 @@ async function resolveAndSelect(value) {
   const local = findAssetByTag(catalog.assets, catalog.identifiers, value);
   if (local) { await selectAsset(local); return; }
   setStatus(`⚠️ Ningún activo coincide con "${value}".`, "warn");
-  router.navigate("/activos");
+  router.navigate("/inspeccionar");
 }
 
 // --- Nuevo activo: wizard de alta (ADR-0025) ---
@@ -1046,13 +1214,13 @@ async function ensureNaWizard() {
     title: "Nuevo equipo",
     finishLabel: "Enrolar",
     renderStep: naRenderStep,
-    onClose: () => router.navigate("/activos"),
+    onClose: () => router.navigate("/inspeccionar"),
     onFinish: naFinish,
     onStepChange: (id, dir) => {
       saveDraft(store, "equipo", naWiz).catch(() => {});
-      if (dir === "next") router.navigate(`/activos/nuevo/${id}`);
+      if (dir === "next") router.navigate(`/equipos/nuevo/${id}`);
       else if (router.depth > 0) router.back();
-      else router.navigate(`/activos/nuevo/${id}`, { replace: true });
+      else router.navigate(`/equipos/nuevo/${id}`, { replace: true });
     },
   });
 }
@@ -1259,31 +1427,40 @@ document.querySelectorAll("[data-screen]").forEach((el) => { screens[el.dataset.
 async function onScreenShow(path, prev, param) {
   $("hdr-back").hidden = path === "/inicio";
   switch (path) {
-    case "/activos":
+    case "/inicio":
+      await renderHome();
+      break;
+    case "/inspeccionar":
       renderCatalogInfo();
       renderAssetList();
       break;
-    case "/activo":
+    case "/visita":
       await renderAssetMenu();
       break;
-    case "/activo/verificar":
+    case "/visita/verificar":
       renderVerifyForm();
       break;
-    case "/activo/camara":
+    case "/visita/cerrar":
+      await renderCloseSummary();
+      break;
+    case "/visita/cerrada":
+      await renderClosedScreen();
+      break;
+    case "/camara":
       await openCameraScreen();
       break;
-    case "/activo/camara/confirmar":
+    case "/camara/confirmar":
       showConfirm();
       break;
-    case "/activos/qr":
+    case "/inspeccionar/qr":
       startQr();
       break;
-    case "/activos/nuevo":
+    case "/equipos/nuevo":
       await ensureNaWizard();
       naWiz.goTo(param || NA_STEPS[0]);
       naUi.render();
       break;
-    case "/cola":
+    case "/sincronizar":
       await renderQueue();
       break;
     case "/consentimiento":
@@ -1291,16 +1468,18 @@ async function onScreenShow(path, prev, param) {
       $("notice-accept").disabled = true;
       break;
   }
+  await renderBanner(path);
 }
 
 function onScreenLeave(prev, next) {
   // El stream se mantiene abierto entre cámara y confirmación (ADR-0024).
-  if (prev === "/activo/camara" && next !== "/activo/camara/confirmar") stopCamera();
-  if (prev === "/activo/camara/confirmar") pendingPhoto = null;
-  if (prev === "/activos/qr") stopQr();
-  if (prev === "/activo/voz") cancelRecording();
+  if (prev === "/camara" && next !== "/camara/confirmar") stopCamera();
+  if (prev === "/camara/confirmar") pendingPhoto = null;
+  if (prev === "/inspeccionar/qr") stopQr();
+  if (prev === "/voz") cancelRecording();
+  if (prev === "/visita/cerrar") revokeCloseThumbs();
   // Al salir del alta de equipo se suelta el wizard; el borrador queda guardado.
-  if (prev.startsWith("/activos/nuevo") && !next.startsWith("/activos/nuevo")) {
+  if (prev.startsWith("/equipos/nuevo") && !next.startsWith("/equipos/nuevo")) {
     naWiz = null;
     naUi = null;
   }
@@ -1309,21 +1488,35 @@ function onScreenLeave(prev, next) {
 const router = createRouter({
   routes: screens,
   defaultPath: "/inicio",
-  paramRoutes: ["/activos/nuevo"],
+  paramRoutes: ["/equipos/nuevo"],
+  aliases: {
+    "/activos": "/inspeccionar",
+    "/activos/qr": "/inspeccionar/qr",
+    "/activos/nuevo": "/equipos/nuevo",
+    "/activo": "/visita",
+    "/activo/verificar": "/visita/verificar",
+    "/activo/camara": "/camara",
+    "/activo/camara/confirmar": "/camara/confirmar",
+    "/activo/voz": "/voz",
+    "/activo/comentario": "/texto",
+    "/cola": "/sincronizar",
+  },
   guards: {
-    "/activo": () => (currentAsset ? null : "/activos"),
-    "/activo/verificar": () => (currentAsset ? null : "/activos"),
-    "/activo/comentario": () => (currentAsset ? null : "/activos"),
-    "/activo/camara": () => {
-      if (!currentAsset) return "/activos";
+    "/visita": () => (currentVisit(visits) ? null : "/inspeccionar"),
+    "/visita/verificar": () => (currentVisit(visits) ? null : "/inspeccionar"),
+    "/visita/cerrar": () => (currentVisit(visits) ? null : "/inspeccionar"),
+    "/visita/cerrada": () => (lastClosed ? null : "/inicio"),
+    "/texto": () => (currentVisit(visits) ? null : "/inspeccionar"),
+    "/camara": () => {
+      if (!currentVisit(visits)) return "/inspeccionar";
       return consentOk() ? null : "/consentimiento";
     },
-    "/activo/camara/confirmar": () => (pendingPhoto ? null : "/activo/camara"),
-    "/activo/voz": () => {
-      if (!currentAsset) return "/activos";
+    "/camara/confirmar": () => (pendingPhoto ? null : "/camara"),
+    "/voz": () => {
+      if (!currentVisit(visits)) return "/inspeccionar";
       return consentOk() ? null : "/consentimiento";
     },
-    "/activos/nuevo": (param) => (param && NA_STEPS.includes(param) ? null : `/activos/nuevo/${NA_STEPS[0]}`),
+    "/equipos/nuevo": (param) => (param && NA_STEPS.includes(param) ? null : `/equipos/nuevo/${NA_STEPS[0]}`),
   },
   onShow: onScreenShow,
   onLeave: onScreenLeave,
@@ -1332,9 +1525,10 @@ const router = createRouter({
 // --- Eventos ---
 
 $("hdr-back").addEventListener("click", () => router.back());
-$("queue-badge").addEventListener("click", () => router.navigate("/cola"));
-$("go-assets").addEventListener("click", () => router.navigate("/activos"));
-$("go-queue").addEventListener("click", () => router.navigate("/cola"));
+$("visit-banner").addEventListener("click", () => router.navigate("/visita"));
+$("queue-badge").addEventListener("click", () => router.navigate("/sincronizar"));
+$("go-assets").addEventListener("click", () => router.navigate("/inspeccionar"));
+$("go-queue").addEventListener("click", () => router.navigate("/sincronizar"));
 $("go-settings").addEventListener("click", () => router.navigate("/ajustes"));
 
 // Aviso de captura (ADR-0026): se acepta una vez y se registra.
@@ -1386,25 +1580,38 @@ $("asset-list").addEventListener("click", async (e) => {
   const asset = catalog.assets.find((a) => a.id === btn.dataset.asset);
   if (asset) await selectAsset(asset);
 });
-$("scan-qr").addEventListener("click", () => router.navigate("/activos/qr"));
+$("scan-qr").addEventListener("click", () => router.navigate("/inspeccionar/qr"));
 $("qr-cancel").addEventListener("click", () => router.back());
-$("new-asset").addEventListener("click", () => router.navigate("/activos/nuevo"));
+$("new-asset").addEventListener("click", () => router.navigate("/equipos/nuevo"));
 
-$("menu-verify").addEventListener("click", () => router.navigate("/activo/verificar"));
+$("menu-verify").addEventListener("click", () => router.navigate("/visita/verificar"));
 $("menu-photos").addEventListener("click", () => {
-  if (requireConsent("/activo/camara")) router.navigate("/activo/camara");
+  if (requireConsent("/camara")) router.navigate("/camara");
 });
 $("menu-voice").addEventListener("click", () => {
-  if (requireConsent("/activo/voz")) router.navigate("/activo/voz");
+  if (requireConsent("/voz")) router.navigate("/voz");
 });
-$("menu-comment").addEventListener("click", () => router.navigate("/activo/comentario"));
-$("end-session").addEventListener("click", async () => {
-  await closeSessionIfOpen();
-  currentAsset = null;
-  setStatus("Sesión terminada. Elige otro activo.", "");
+$("menu-comment").addEventListener("click", () => router.navigate("/texto"));
+$("visit-next").addEventListener("click", () => {
+  const target = $("visit-next").dataset.target || "/visita/cerrar";
+  if (target === "/camara" && !requireConsent("/camara")) return;
+  router.navigate(target);
+});
+$("end-session").addEventListener("click", () => router.navigate("/visita/cerrar"));
+$("home-visit").addEventListener("click", () => router.navigate("/visita"));
+
+// Cierre de visita y pantalla de visita cerrada (ADR-0027).
+$("close-cancel").addEventListener("click", () => router.back());
+$("close-confirm").addEventListener("click", async () => {
+  const closed = await closeCurrentVisit();
+  if (!closed) { router.navigate("/inicio"); return; }
+  setStatus("Visita cerrada. Queda en la cola para sincronizar.", "ok");
   await renderQueue();
-  router.navigate("/activos");
+  router.navigate("/visita/cerrada", { replace: true });
 });
+$("closed-next").addEventListener("click", () => router.navigate("/inspeccionar"));
+$("closed-sync").addEventListener("click", () => router.navigate("/sincronizar"));
+$("closed-home").addEventListener("click", () => router.navigate("/inicio"));
 
 $("verify-form").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-attr]");
@@ -1434,15 +1641,15 @@ $("verify-form").addEventListener("input", (e) => {
 $("save-verify").addEventListener("click", saveVerification);
 $("goto-plate").addEventListener("click", () => {
   presetCategory = "placa";
-  if (!requireConsent("/activo/camara")) return;
-  router.navigate("/activo/camara");
+  if (!requireConsent("/camara")) return;
+  router.navigate("/camara");
 });
 
 $("cam-back").addEventListener("click", () => router.back());
 $("cam-switch").addEventListener("click", switchCamera);
 $("cam-shutter").addEventListener("click", shutter);
-$("cam-done").addEventListener("click", () => router.navigate("/activo"));
-$("cam-thumb").addEventListener("click", () => router.navigate("/cola"));
+$("cam-done").addEventListener("click", () => router.navigate("/visita"));
+$("cam-thumb").addEventListener("click", () => router.navigate("/sincronizar"));
 $("cam-torch").addEventListener("click", async () => {
   torchOn = !torchOn;
   const ok = hw.setTorch ? await hw.setTorch(cam, torchOn).catch(() => false) : false;
@@ -1475,7 +1682,7 @@ $("sync").addEventListener("click", syncAll);
 if (navigator.mediaDevices?.addEventListener) {
   navigator.mediaDevices.addEventListener("devicechange", async () => {
     cameras = await hw.listCameras().catch(() => []);
-    if (router.current === "/activo/camara") updateCamControls();
+    if (router.current === "/camara") updateCamControls();
   });
 }
 if ("BarcodeDetector" in window) $("scan-qr").hidden = false;
@@ -1498,29 +1705,33 @@ try {
   consent = await loadConsent(store);
 } catch (e) { log("consentimiento: " + e.message); }
 renderConsentState();
+await loadVisits();
 await renderQueue();
 await refreshCatalog();
 
-// Restaurar sesión/activo tras recargar (ADR-0024): evita sesiones huérfanas.
+// Migración de la Tanda D: ui.session + ítems de cola sin visita -> visitas (ADR-0027).
 try {
-  const savedSession = (await store.get("kv", "ui.session"))?.value;
-  const savedAssetId = (await store.get("kv", "ui.currentAssetId"))?.value;
-  if (savedSession && savedAssetId && !savedSession.ended_at) {
-    const asset = catalog.assets.find((a) => a.id === savedAssetId);
-    if (asset) {
-      session = savedSession;
-      currentAsset = asset;
-      log("sesión restaurada: " + session.id);
-    } else {
-      await queue.enqueue({ kind: "session-end", session_id: savedSession.id, ended_at: now() });
-      await clearPersistedSession();
-      log("sesión huérfana cerrada: activo no encontrado en el catálogo");
-      await renderQueue();
-    }
+  const uiSession = (await store.get("kv", "ui.session"))?.value || null;
+  const assetsById = Object.fromEntries(catalog.assets.map((a) => [a.id, a]));
+  const before = visits.length;
+  visits = legacyVisits(await queue.list(), visits, { uiSession, assetsById, nowIso: now() });
+  if (visits.length !== before) {
+    await saveVisits();
+    log(`migración: ${visits.length - before} visita(s) reconstruida(s)`);
   }
-} catch (e) { log("restaurar sesión: " + e.message); }
+  await store.delete("kv", "ui.session");
+  await store.delete("kv", "ui.currentAssetId");
+} catch (e) { log("migración de visitas: " + e.message); }
+syncCurrentFromVisit();
+
+// Visita olvidada: más de 12 h abierta (ADR-0027).
+const stale = staleVisit(visits, now());
+if (stale) {
+  setStatus(`⚠️ Tienes una visita abierta desde ${(stale.started_at || "").slice(11, 16)}: ciérrala.`, "warn");
+}
 
 router.start();
+if (stale) router.navigate("/visita/cerrar", { replace: true });
 </script>
 </body>
 </html>
