@@ -217,6 +217,12 @@ a { color: var(--of-primary); }
 .of-media-card .of-media-meta { padding: var(--of-space-2); font-size: 0.72rem; color: var(--of-text-muted); }
 .of-media-card .of-media-id { word-break: break-all; }
 .of-media-card .of-media-caption { margin-top: var(--of-space-1); color: var(--of-text); font-size: 0.75rem; }
+/* Miniaturas sueltas dentro de una galería (p. ej. resumen de cierre): nunca a resolución nativa. */
+.of-gallery > img {
+  width: 100%; max-width: 100%; aspect-ratio: 1 / 1; height: auto;
+  object-fit: cover; display: block; border-radius: var(--of-radius-sm);
+  background: var(--of-bg); border: 1px solid var(--of-border);
+}
 .of-chip { padding: 0.3rem 0.7rem; border: 1px solid var(--of-border); border-radius: 999px; background: var(--of-surface); color: var(--of-text); font-size: 0.8rem; cursor: pointer; font-family: inherit; }
 .of-chip.active { background: var(--of-primary); border-color: var(--of-primary); color: #fff; }
 

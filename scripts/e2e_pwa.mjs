@@ -293,6 +293,24 @@ async function main() {
     await waitFor("location.hash === '#/visita/cerrar'", "resumen de cierre");
     const closeSummary = await text("#close-summary");
     check("el resumen de cierre muestra las capturas", /1 foto/.test(closeSummary || ""), (closeSummary || "").slice(0, 80));
+    const closeLayout = await js(`(() => {
+      const imgs = [...document.querySelectorAll('#close-thumbs img')];
+      const widths = imgs.map((i) => Math.round(i.getBoundingClientRect().width));
+      const btn = document.querySelector('#close-confirm')?.getBoundingClientRect();
+      return {
+        count: imgs.length,
+        maxW: widths.length ? Math.max(...widths) : 0,
+        btnTop: btn ? Math.round(btn.top) : -1,
+        vw: window.innerWidth,
+        vh: window.innerHeight,
+      };
+    })()`);
+    check("las miniaturas del cierre caben en la pantalla",
+      closeLayout.maxW > 0 && closeLayout.maxW <= Math.ceil(closeLayout.vw / 2) + 4,
+      JSON.stringify(closeLayout));
+    check("el botón «Confirmar cierre» queda a la vista",
+      closeLayout.btnTop >= 0 && closeLayout.btnTop < closeLayout.vh,
+      `top=${closeLayout.btnTop} de ${closeLayout.vh}px`);
     await click("#close-confirm");
     await waitFor("location.hash === '#/visita/cerrada'", "visita cerrada");
     check("la visita se cierra y muestra el resumen", true);

@@ -37,7 +37,7 @@
       <button id="go-settings" class="of-btn">Ajustes</button>
     </div>
     <p class="of-status">Flujo por pantallas: el botón/gesto Atrás del teléfono vuelve al paso anterior.</p>
-    <p class="of-status" id="build">build e6.3</p>
+    <p class="of-status" id="build">build e6.4</p>
   </section>
 
   <!-- Aviso de captura y aceptación (ADR-0026) -->
@@ -144,11 +144,12 @@
   <section data-screen="/visita/cerrar" class="of-card" hidden>
     <h2 class="of-section-title">Cerrar visita</h2>
     <div id="close-summary"></div>
-    <div id="close-thumbs" class="of-gallery" style="margin-top:var(--of-space-3)"></div>
     <div class="of-actions">
       <button id="close-confirm" class="of-btn primary">Confirmar cierre</button>
       <button id="close-cancel" class="of-btn">Volver</button>
     </div>
+    <div id="close-thumbs" class="of-gallery"></div>
+    <p id="close-thumbs-more" class="of-progress-legend"></p>
   </section>
 
   <!-- Visita cerrada -->
@@ -841,6 +842,7 @@ function revokeCloseThumbs() {
   for (const u of closeThumbUrls) URL.revokeObjectURL(u);
   closeThumbUrls = [];
   $("close-thumbs").innerHTML = "";
+  $("close-thumbs-more").textContent = "";
 }
 
 async function renderCloseSummary() {
@@ -858,8 +860,9 @@ async function renderCloseSummary() {
     ${c.total === 0 ? '<p class="of-status">No hay capturas en esta visita.</p>' : ""}
   </div>`;
   revokeCloseThumbs();
-  const photos = items.filter((i) => i.kind === "media" && i.blob).slice(0, 12);
-  for (const p of photos) {
+  const photos = items.filter((i) => i.kind === "media" && i.blob);
+  const shown = photos.slice(0, 6);
+  for (const p of shown) {
     const url = URL.createObjectURL(storedToBlob(p.blob));
     closeThumbUrls.push(url);
     const img = document.createElement("img");
@@ -867,6 +870,9 @@ async function renderCloseSummary() {
     img.alt = p.doc?.id || "foto";
     img.loading = "lazy";
     $("close-thumbs").appendChild(img);
+  }
+  if (photos.length > shown.length) {
+    $("close-thumbs-more").textContent = `y ${photos.length - shown.length} foto(s) más en esta visita`;
   }
 }
 
