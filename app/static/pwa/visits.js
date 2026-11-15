@@ -29,6 +29,15 @@ export function markSynced(visits, ids) {
   return visits.map((v) => (ids.includes(v.id) && v.state === "closed" ? { ...v, state: "synced" } : v));
 }
 
+// Cancela una visita abierta: se descarta la visita y sus datos (ADR-0027).
+// Solo se cancela una visita abierta; una cerrada se corrige ítem por ítem.
+export function abortVisit(visits, id) {
+  const v = visits.find((x) => x.id === id);
+  if (!v) return visits;
+  if (v.state !== "open") throw new Error("solo se cancela una visita abierta");
+  return visits.filter((x) => x.id !== id);
+}
+
 export const currentVisit = (visits) => visits.find((v) => v.state === "open") || null;
 export const closedVisits = (visits) => visits.filter((v) => v.state === "closed");
 

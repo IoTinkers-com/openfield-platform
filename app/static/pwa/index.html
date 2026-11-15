@@ -37,7 +37,7 @@
       <button id="go-settings" class="of-btn">Ajustes</button>
     </div>
     <p class="of-status">Flujo por pantallas: el botón/gesto Atrás del teléfono vuelve al paso anterior.</p>
-    <p class="of-status" id="build">build e6.4</p>
+    <p class="of-status" id="build">build e6.5</p>
   </section>
 
   <!-- Aviso de captura y aceptación (ADR-0026) -->
@@ -137,6 +137,7 @@
       <button id="menu-voice" class="of-btn">🎙️ Nota de voz</button>
       <button id="menu-comment" class="of-btn">💬 Comentario</button>
       <button id="end-session" class="of-btn danger">Terminar visita</button>
+      <button id="visit-abort" class="of-btn">Cancelar visita</button>
     </div>
   </section>
 
@@ -147,6 +148,7 @@
     <div class="of-actions">
       <button id="close-confirm" class="of-btn primary">Confirmar cierre</button>
       <button id="close-cancel" class="of-btn">Volver</button>
+      <button id="close-abort" class="of-btn danger">Cancelar visita</button>
     </div>
     <div id="close-thumbs" class="of-gallery"></div>
     <p id="close-thumbs-more" class="of-progress-legend"></p>
@@ -279,7 +281,7 @@ import { newId, now } from "./ids.js";
 import { createIndexedDbStore, createMemoryStore, blobToStored, storedToBlob } from "./store.js";
 import { createPersistentQueue, sessionOf, summarize } from "./queue.js";
 import {
-  currentVisit, closedVisits, openVisit, closeVisit, markSynced, pruneSynced, staleVisit,
+  currentVisit, closedVisits, openVisit, closeVisit, markSynced, pruneSynced, abortVisit, staleVisit,
   assignDrafts, nearbyAssets, legacyVisits, describeCounts, sumCounts,
 } from "./visits.js";
 import { createRouter } from "./router.js";
@@ -753,6 +755,43 @@ async function closeCurrentVisit() {
   syncCurrentFromVisit();
   log("visita cerrada: " + v.id);
   return lastClosed;
+}
+
+// Cancela la visita abierta: descarta la visita y sus datos capturados (ADR-0027).
+// Si la sesión ya llegó al servidor, se encola su cierre para no dejarla abierta.
+async function discardVisitData(visitId) {
+  const items = await queue.list();
+  const own = items.filter((i) => sessionOf(i) === visitId);
+  const hadSessionDoc = own.some((i) => i.kind === "doc" && i.entity === "session");
+  for (const it of own) await queue.remove(it.qid);
+  if (!hadSessionDoc) {
+    await queue.enqueue({ kind: "session-end", session_id: visitId, ended_at: now() });
+  }
+  return { removed: own.length, closedRemote: !hadSessionDoc };
+}
+
+async function cancelCurrentVisit() {
+  const v = currentVisit(visits);
+  if (!v) return false;
+  const items = (await queue.list()).filter((i) => !i.draft && sessionOf(i) === v.id);
+  const c = summarize(items).sessions[v.id] || { media: 0, audio: 0, notes: 0, verify: 0, total: 0 };
+  const detail = c.total
+    ? `Se perderán los datos capturados: ${describeCounts(c)}.`
+    : "Esta visita no tiene capturas.";
+  const ok = confirm(
+    `Estás a punto de cancelar la visita de ${v.asset_name}.\n\n${detail}\n\n¿Confirmas la cancelación?`,
+  );
+  if (!ok) return false;
+  const res = await discardVisitData(v.id);
+  visits = abortVisit(visits, v.id);
+  await saveVisits();
+  syncCurrentFromVisit();
+  lastClosed = null;
+  await renderQueue();
+  setStatus(`Visita cancelada. Se descartaron ${res.removed} dato(s).`, "warn");
+  log(`visita cancelada: ${v.id} (${res.removed} ítem(s) descartados)`);
+  router.navigate("/inicio", { replace: true });
+  return true;
 }
 
 async function renderAssetMenu() {
@@ -2142,6 +2181,8 @@ $("visit-next").addEventListener("click", () => {
   router.navigate(target);
 });
 $("end-session").addEventListener("click", () => router.navigate("/visita/cerrar"));
+$("visit-abort").addEventListener("click", cancelCurrentVisit);
+$("close-abort").addEventListener("click", cancelCurrentVisit);
 $("home-visit").addEventListener("click", () => router.navigate("/visita"));
 
 // Cierre de visita y pantalla de visita cerrada (ADR-0027).

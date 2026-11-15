@@ -423,6 +423,40 @@ async function main() {
     await waitFor("location.hash === '#/capturar'", "consentimiento restaurado", 8000);
     check("se puede volver a aceptar el aviso", true);
 
+    // ------------------------------------------- escenario F: cancelar visita
+    await goto("#/inicio");
+    await click("#go-assets");
+    await waitFor("document.querySelectorAll('#asset-list [data-asset]').length > 0", "lista para cancelar");
+    await js("(() => { document.querySelector('#asset-list [data-asset]').click(); return true; })()");
+    await waitFor("location.hash === '#/visita'", "visita a cancelar");
+    const sessionsBefore = (await (await fetch(`${BASE}/documents?entity_type=session&tenant_id=tenant-001`)).json()).length;
+    await click("#menu-photos");
+    await waitFor("location.hash === '#/camara'", "cámara antes de cancelar");
+    await waitFor("(() => { const v = document.querySelector('#preview'); return v && v.videoWidth > 0; })()", "frames");
+    await click("#cam-shutter");
+    await waitFor("location.hash === '#/camara/confirmar'", "confirmación");
+    await click("#conf-use");
+    await waitFor("location.hash === '#/camara'", "vuelta a cámara");
+    await goto("#/visita");
+    await click("#visit-abort"); // el arnés acepta el confirm automáticamente
+    await waitFor("location.hash === '#/inicio'", "inicio tras cancelar", 10000);
+    const afterCancel = await js(`({
+      status: document.querySelector('#status')?.textContent || '',
+      tray: document.querySelector('#home-tray') ? !document.querySelector('#home-tray').hidden : false,
+      visit: document.querySelector('#home-visit') ? !document.querySelector('#home-visit').hidden : false,
+    })`);
+    check("cancelar visita avisa y descarta los datos", /Visita cancelada/.test(afterCancel.status) && !afterCancel.tray && !afterCancel.visit, JSON.stringify(afterCancel));
+    await goto("#/sincronizar");
+    await waitFor("document.querySelector('#sync-summary').textContent.length > 10", "resumen tras cancelar");
+    const summaryCancel = await text("#sync-summary");
+    check("la visita cancelada no queda en la cola de sincronización",
+      /No hay visitas cerradas/.test(summaryCancel || "") && !/sin asignar/.test(summaryCancel || ""),
+      summaryCancel);
+    await sleep(1200);
+    const sessionsAfter = (await (await fetch(`${BASE}/documents?entity_type=session&tenant_id=tenant-001`)).json()).length;
+    check("la visita cancelada no se envió a la plataforma", sessionsAfter === sessionsBefore,
+      `${sessionsBefore} -> ${sessionsAfter} sesiones`);
+
     // ------------------------------------------- escenario E: wizard del panel admin
     await cdp.send("Page.navigate", { url: BASE + "/admin/" }, sid);
     await waitFor("document.querySelector('#new-type-btn')", "panel admin");
