@@ -46,12 +46,13 @@ a { color: var(--of-primary); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--of-space-3);
-  padding: var(--of-space-3) var(--of-space-4);
+  gap: var(--of-space-2);
+  padding: var(--of-space-2) var(--of-space-3);
   background: var(--of-surface);
   border-bottom: 1px solid var(--of-border);
   margin-bottom: var(--of-space-4);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .of-brand {
@@ -62,6 +63,10 @@ a { color: var(--of-primary); }
   font-size: 1.1rem;
   text-decoration: none;
   color: var(--of-text);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .of-brand .of-logo {
@@ -88,6 +93,22 @@ a { color: var(--of-primary); }
 .of-nav-link:hover { background: var(--of-primary-dark); }
 .of-nav-link.secondary { background: transparent; color: var(--of-primary); border: 1px solid var(--of-border); }
 .of-nav-link.secondary:hover { background: var(--of-bg); }
+
+/* Cabecera compacta: accesos como iconos en móvil y con etiqueta en pantallas anchas */
+.of-topnav { display: flex; align-items: center; gap: var(--of-space-1); margin-left: auto; flex: 0 0 auto; }
+.of-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem;
+  min-width: 44px; min-height: 44px; padding: 0 0.5rem;
+  border: 1px solid var(--of-border); border-radius: var(--of-radius-sm);
+  background: var(--of-surface); color: var(--of-text);
+  text-decoration: none; font: inherit; font-size: 1.05rem; cursor: pointer;
+}
+.of-icon-btn:hover { border-color: var(--of-primary); }
+.of-topnav .of-badge { cursor: pointer; }
+.of-nav-label { display: none; font-size: 0.85rem; }
+.of-brand-sub { display: none; }
+@media (min-width: 560px) { .of-brand-sub { display: inline; } }
+@media (min-width: 760px) { .of-nav-label { display: inline; } }
 
 /* Tarjetas, secciones */
 .of-card {

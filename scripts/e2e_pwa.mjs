@@ -195,6 +195,18 @@ async function main() {
     console.log("   diagnóstico de arranque:", JSON.stringify(bootState));
     if (errors.length) console.log("   errores al cargar:", errors.slice(0, 5));
     check("la PWA carga con la build esperada", bootHash === "#/inicio", `hash=${bootHash}`);
+    const header = await js(`(() => {
+      const bar = document.querySelector('.of-topbar');
+      const r = bar.getBoundingClientRect();
+      return {
+        overflow: bar.scrollWidth - bar.clientWidth,
+        right: Math.round(r.right), vw: window.innerWidth,
+        icons: document.querySelectorAll('.of-topnav .of-icon-btn').length,
+        labels: [...document.querySelectorAll('.of-topnav .of-icon-btn')].every((a) => (a.getAttribute('aria-label') || '').length > 0),
+      };
+    })()`);
+    check("la cabecera no se desborda en móvil", header.overflow <= 0 && header.right <= header.vw + 1, JSON.stringify(header));
+    check("los accesos de la cabecera son iconos con etiqueta accesible", header.icons === 2 && header.labels, `${header.icons} icono(s)`);
 
     // ------------------------------------------------- consentimiento único
     await click("#home-capture");
