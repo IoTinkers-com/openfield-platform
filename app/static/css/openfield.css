@@ -262,6 +262,9 @@ a { color: var(--of-primary); }
 
 /* Captura por pantallas: una pantalla por paso (ADR-0024) */
 [data-screen][hidden] { display: none !important; }
+/* El atributo `hidden` debe ganar siempre: varias clases fijan display (flex/block)
+   y de otro modo un elemento "oculto" seguiría visible. */
+[hidden] { display: none !important; }
 
 /* Cámara a pantalla completa (overlay CSS; iOS no soporta Fullscreen API) */
 .of-cam {

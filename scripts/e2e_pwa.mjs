@@ -215,7 +215,7 @@ async function main() {
     await waitFor("location.hash === '#/camara'", "cámara");
     const videoOk = await waitFor("(() => { const v = document.querySelector('#preview'); return v && v.videoWidth > 0; })()", "stream de cámara");
     check("la cámara abre y entrega frames", Boolean(videoOk));
-    const camLoadingHidden = await js("(() => { const el = document.querySelector('#cam-loading'); return !!el && el.hidden; })()");
+    const camLoadingHidden = await js("(() => { const el = document.querySelector('#cam-loading'); return !!el && getComputedStyle(el).display === 'none'; })()");
     check("el indicador de «abriendo cámara» desaparece al abrir", Boolean(camLoadingHidden));
     await click("#cam-shutter");
     await waitFor("location.hash === '#/camara/confirmar'", "confirmación");
@@ -361,7 +361,15 @@ async function main() {
     const assets = await (await fetch(`${BASE}/admin/assets?tenant_id=tenant-001&q=Equipo ${RUN}`)).json();
     check("el equipo nuevo existe en el registro", assets.total >= 1, `${assets.total} activo(s)`);
 
-    // -------------------------------------- escenario B: varias visitas + sync
+    await goto("#/inicio");
+    const homeVisibility = await js(`(() => {
+      const vis = (sel) => { const el = document.querySelector(sel); return !!el && getComputedStyle(el).display !== 'none'; };
+      return { visit: vis('#home-visit'), tray: vis('#home-tray') };
+    })()`);
+    check("en Inicio los botones ocultos no se muestran (atributo hidden efectivo)",
+      homeVisibility.visit === false && homeVisibility.tray === false, JSON.stringify(homeVisibility));
+
+    // ---------------------------------------- escenario B: varias visitas + sync
     const openVisitAndCapture = async () => {
       await goto("#/inicio");
       await click("#go-assets");
