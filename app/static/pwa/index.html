@@ -438,14 +438,30 @@ function kindLabel(it) {
   return it.kind === "doc" ? (DOC_LABELS[it.entity] || it.entity) : (KIND_LABELS[it.kind] || it.kind);
 }
 
+// Ítems pendientes cuya sesión no está registrada como visita (datos de versiones previas).
+function orphanSessions(items) {
+  const known = new Set(visits.map((v) => v.id));
+  const out = new Map();
+  for (const it of items) {
+    const sid = sessionOf(it);
+    if (!sid || it.draft || known.has(sid)) continue;
+    out.set(sid, (out.get(sid) || 0) + 1);
+  }
+  return out;
+}
+
 // Cola: badge de la cabecera + pantalla de sincronización por visita (ADR-0027).
 async function renderQueue() {
   const items = await queue.list();
   const badge = $("queue-badge");
   const closed = closedVisits(visits).length;
   const drafts = summarize(items).drafts.total;
+  const orphans = orphanSessions(items).size;
   if (closed) {
     badge.textContent = `${closed} visita${closed === 1 ? "" : "s"} por sincronizar`;
+    badge.className = "of-badge warn";
+  } else if (orphans) {
+    badge.textContent = `${orphans} sesión(es) anterior(es) por sincronizar`;
     badge.className = "of-badge warn";
   } else if (drafts) {
     badge.textContent = `${drafts} captura${drafts === 1 ? "" : "s"} sin asignar`;
@@ -459,34 +475,81 @@ async function renderQueue() {
 
 let syncResults = {}; // sessionId -> { synced, failed, last_error }
 let syncAfterClose = false;
+let lastDiag = "";
 
 async function renderSync() {
   const items = await queue.list();
   const s = summarize(items);
   const closed = closedVisits(visits);
   const open = currentVisit(visits);
+  const known = new Set(visits.map((v) => v.id));
+  const orphans = orphanSessions(items);
   const totals = sumCounts(closed.map((v) => s.sessions[v.id] || {}));
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const openCounts = open ? (s.sessions[open.id] || { media: 0, audio: 0, notes: 0, verify: 0, total: 0 }) : null;
   let summary = closed.length
     ? `Tienes ${plural(closed.length, "visita cerrada", "visitas cerradas")} (${plural(closed.length, "equipo", "equipos")}) con ${describeCounts(totals)} por sincronizar.`
     : "No hay visitas cerradas por sincronizar.";
+  if (open && openCounts && openCounts.total) {
+    summary += ` La visita en curso de ${open.asset_name} tiene ${describeCounts(openCounts)}: ciérrala para enviarla.`;
+  }
   if (s.drafts.total) {
-    summary += ` Hay ${s.drafts.total} captura(s) sin asignar que no se sincronizarán (Bandeja).`;
+    summary += ` Además hay ${s.drafts.total} captura(s) sin asignar que no se sincronizan hasta asignarlas.`;
   }
   $("sync-summary").textContent = summary;
   const btn = $("sync-all");
-  btn.textContent = closed.length ? `⤒ Sincronizar ${plural(closed.length, "visita", "visitas")}` : "⤒ Sincronizar";
-  btn.disabled = !closed.length || syncing;
+  const canCloseAndSync = Boolean(open && openCounts && openCounts.total);
+  if (closed.length) {
+    btn.textContent = `⤒ Sincronizar ${plural(closed.length, "visita", "visitas")}`;
+  } else if (canCloseAndSync) {
+    btn.textContent = "Cerrar visita y sincronizar";
+  } else {
+    btn.textContent = "⤒ Sincronizar";
+  }
+  btn.disabled = (!closed.length && !orphans.size && !canCloseAndSync) || syncing;
+  btn.dataset.mode = !closed.length && canCloseAndSync ? "close" : "sync";
 
   const box = $("sync-cards");
   box.innerHTML = "";
+
+  // Aviso accionable para la bandeja.
+  if (s.drafts.total) {
+    const warn = document.createElement("div");
+    warn.className = "of-card";
+    warn.style.borderColor = "var(--of-warning)";
+    warn.innerHTML = `<strong>⚠ ${plural(s.drafts.total, "captura sin asignar", "capturas sin asignar")}</strong>
+      <p class="of-status">No se sincronizan hasta que las asignes a un equipo.</p>`;
+    const b = document.createElement("button");
+    b.className = "of-btn primary";
+    b.textContent = "Ir a la bandeja";
+    b.addEventListener("click", () => router.navigate("/bandeja"));
+    warn.appendChild(b);
+    box.appendChild(warn);
+  }
+
+  // Sesiones antiguas con ítems pendientes.
+  if (orphans.size) {
+    const card = document.createElement("div");
+    card.className = "of-card";
+    const total = [...orphans.values()].reduce((a, n) => a + n, 0);
+    card.innerHTML = `<strong>Sesiones anteriores</strong>
+      <div class="of-popup-id">${orphans.size} sesión(es) · ${total} elemento(s) pendientes de datos previos.</div>`;
+    const b = document.createElement("button");
+    b.className = "of-btn primary";
+    b.textContent = "Sincronizar sesiones anteriores";
+    b.disabled = syncing;
+    b.addEventListener("click", () => syncVisits([...orphans.keys()]));
+    card.appendChild(b);
+    box.appendChild(card);
+  }
+
   const groups = new Map();
   for (const v of [...closed, ...(open ? [open] : [])]) {
     const key = ((v.state === "closed" ? v.ended_at : v.started_at) || "").slice(0, 10) || "sin fecha";
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(v);
   }
-  if (!groups.size) {
+  if (!groups.size && !s.drafts.total && !orphans.size) {
     box.innerHTML = '<p class="of-status">Sin visitas que mostrar.</p>';
     return;
   }
@@ -497,6 +560,9 @@ async function renderSync() {
     box.appendChild(h);
     for (const v of list) box.appendChild(visitCard(v, items, s.sessions[v.id] || {}));
   }
+  // Diagnóstico útil para soporte (visible en la pantalla), sin repetir líneas.
+  const diag = `cola: ${items.length} ítem(s) · borradores ${s.drafts.total} · visitas cerradas ${closed.length} · sesiones antiguas ${orphans.size}`;
+  if (diag !== lastDiag) { lastDiag = diag; log(diag); }
 }
 
 function visitCard(v, items, counts) {
@@ -1776,11 +1842,15 @@ async function syncItem(item) {
 // Sincronización por visita (ADR-0027): solo visitas cerradas, resultado por visita.
 async function syncVisits(ids) {
   if (recording) { setStatus("⚠️ Detén la grabación antes de sincronizar.", "warn"); return; }
-  if (syncing || !ids.length) return;
+  if (syncing) { setStatus("⏳ Ya hay una sincronización en curso.", "warn"); return; }
+  if (!ids.length) {
+    setStatus("⚠️ No hay visitas cerradas por sincronizar. Si capturaste sin equipo, asigna la bandeja primero.", "warn");
+    return;
+  }
   syncing = true;
-  setStatus("⏳ Sincronizando…");
-  await renderQueue(); // bloquea las acciones de ítems durante el flush
   try {
+    setStatus("⏳ Sincronizando…");
+    await renderQueue(); // bloquea las acciones de ítems durante el flush
     const res = await queue.flushBySession(syncItem, ids);
     log(`sincronización: ${res.synced} ok, ${res.failed} fallidos`);
     const done = [];
@@ -1801,16 +1871,27 @@ async function syncVisits(ids) {
       setStatus(`✅ Sincronizadas ${done.length} de ${ids.length} visita(s).`, "ok");
       await refreshCatalog();
     } else {
-      setStatus("No había pendientes.", "");
+      setStatus("No había pendientes que enviar en esas visitas.", "");
     }
+  } catch (e) {
+    setStatus("❌ Error al sincronizar: " + friendlyError(e), "danger");
+    log("sync: " + (e && e.message ? e.message : e));
   } finally {
     syncing = false;
     await renderQueue();
   }
 }
 
+// Envía todas las visitas cerradas + cualquier sesión con ítems pendientes que no
+// esté registrada como visita (sesiones antiguas): nada queda atascado.
 async function syncAll() {
-  return syncVisits(closedVisits(visits).map((v) => v.id));
+  const ids = new Set(closedVisits(visits).map((v) => v.id));
+  const known = new Set(visits.map((v) => v.id));
+  for (const it of await queue.list()) {
+    const sid = sessionOf(it);
+    if (sid && !it.draft && !known.has(sid)) ids.add(sid);
+  }
+  return syncVisits([...ids]);
 }
 
 // --- Router: una pantalla por paso (ADR-0024) ---
@@ -2110,7 +2191,14 @@ $("discard-transcript").addEventListener("click", () => {
   $("transcript-area").hidden = true;
 });
 $("save-comment").addEventListener("click", saveComment);
-$("sync-all").addEventListener("click", syncAll);
+$("sync-all").addEventListener("click", async () => {
+  if ($("sync-all").dataset.mode === "close") {
+    syncAfterClose = true;
+    router.navigate("/visita/cerrar");
+    return;
+  }
+  await syncAll();
+});
 
 if (navigator.mediaDevices?.addEventListener) {
   navigator.mediaDevices.addEventListener("devicechange", async () => {

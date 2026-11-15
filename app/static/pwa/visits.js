@@ -83,6 +83,8 @@ export function nearbyAssets(assets, fix, limit = 5) {
 }
 
 // Migra sesiones de la Tanda D (ui.session + ítems de cola sin visita registrada).
+// Si el documento de sesión ya no está en la cola (se sincronizó antes), la visita
+// se sintetiza desde los propios ítems para que nada quede sin poder enviarse.
 export function legacyVisits(items, visits, { uiSession = null, assetsById = {}, nowIso = new Date().toISOString() } = {}) {
   const known = new Set(visits.map((v) => v.id));
   const out = [...visits];
@@ -90,15 +92,35 @@ export function legacyVisits(items, visits, { uiSession = null, assetsById = {},
   const docs = new Map(items.filter((i) => i.kind === "doc" && i.entity === "session").map((i) => [i.doc.id, i.doc]));
   const sids = new Set(items.map(sessionOf).filter(Boolean));
   if (uiSession && !uiSession.ended_at) sids.add(uiSession.id);
+
+  // Datos mínimos por sesión tomados de sus ítems (asset y hora más antigua).
+  const hints = new Map();
+  for (const it of items) {
+    const sid = sessionOf(it);
+    if (!sid) continue;
+    const assetId = it.doc?.asset_id ?? it.asset_id ?? null;
+    const created = it.created_at || nowIso;
+    const h = hints.get(sid) || { assetId: null, started: created };
+    if (assetId) h.assetId = assetId;
+    if (created < h.started) h.started = created;
+    hints.set(sid, h);
+  }
+
   for (const sid of sids) {
     if (known.has(sid)) continue;
     const session = docs.get(sid) || (uiSession && uiSession.id === sid ? uiSession : null);
-    if (!session) continue;
+    const hint = hints.get(sid) || { assetId: null, started: nowIso };
+    const assetId = session?.asset_id ?? hint.assetId ?? null;
+    const startedAt = session?.started_at || hint.started;
     const open = Boolean(uiSession && uiSession.id === sid && !ends.has(sid));
-    const asset = { id: session.asset_id, name: assetsById[session.asset_id]?.name };
+    const asset = { id: assetId, name: assetsById[assetId]?.name || assetId };
     out.push({
-      ...mk(session, asset),
+      id: sid,
+      session: session || { id: sid, asset_id: assetId, started_at: startedAt, ended_at: null },
+      asset_id: assetId,
+      asset_name: asset.name || sid,
       state: open ? "open" : "closed",
+      started_at: startedAt,
       ended_at: open ? null : (ends.get(sid) || nowIso),
     });
   }
