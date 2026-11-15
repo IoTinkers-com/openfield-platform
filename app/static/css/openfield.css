@@ -328,6 +328,13 @@ a { color: var(--of-primary); }
 .of-card-option.active { border-color: var(--of-primary); background: #eaf2ff; }
 .of-wizard-overlay { position: fixed; inset: 0; z-index: 80; background: var(--of-surface); overflow-y: auto; }
 
+/* Indicador de grabación siempre visible (ADR-0026) */
+.of-rec {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 0.4rem); right: 0.6rem;
+  z-index: 90; background: #d93025; color: #fff; border-radius: 999px;
+  padding: 0.15rem 0.6rem; font-size: 0.8rem; font-weight: 700;
+}
+
 /* Pestañas (panel de administración) */
 .of-tabs { display: flex; gap: var(--of-space-2); flex-wrap: wrap; margin-bottom: var(--of-space-4); border-bottom: 1px solid var(--of-border); }
 .of-tab {

@@ -55,13 +55,14 @@ function msg(id, text, cls = "") {
 // ---------------------------------------------------------------------------
 
 function showTab(name) {
-  for (const t of ["assets", "types", "import", "states"]) {
+  for (const t of ["assets", "types", "import", "states", "consents"]) {
     $(`tab-${t}`).style.display = t === name ? "" : "none";
   }
   document.querySelectorAll(".of-tab").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === name);
   });
   if (name === "import") loadBatches();
+  if (name === "consents") loadConsents();
 }
 
 document.querySelectorAll(".of-tab").forEach((b) =>
@@ -695,7 +696,7 @@ let wizardCtx = null;
 
 function currentTab() {
   const tab = (location.hash.replace("#", "") || "assets").split("?")[0];
-  return ["assets", "types", "import", "states"].includes(tab) ? tab : "assets";
+  return ["assets", "types", "import", "states", "consents"].includes(tab) ? tab : "assets";
 }
 
 async function startWizard(kind) {
@@ -1129,6 +1130,37 @@ const EQUIPO_WIZARD = {
 const WIZARDS = { tipo: TIPO_WIZARD, equipo: EQUIPO_WIZARD };
 
 // ---------------------------------------------------------------------------
+// Consentimientos (solo lectura, ADR-0026)
+// ---------------------------------------------------------------------------
+
+async function loadConsents() {
+  msg("consents-msg", "");
+  const tbody = $("consents-tbody");
+  try {
+    const docs = await api("/documents?entity_type=consent-record&tenant_id=tenant-001");
+    const rows = [...docs].sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1));
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="of-empty">Sin registros de consentimiento.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows
+      .map((d) => `<tr>
+        <td>${escapeHtml(formatDate(d.occurred_at))}</td>
+        <td>${escapeHtml(d.subject?.display_name || d.subject?.id || "—")}
+          <div class="of-popup-id">${escapeHtml(d.subject?.type || "")}</div></td>
+        <td>${escapeHtml(d.device_id || "—")}</td>
+        <td>${escapeHtml(`${d.policy_id || ""} v${d.policy_version || ""}`)}</td>
+        <td>${d.action === "revoke" ? '<span class="of-badge danger">revocado</span>' : '<span class="of-badge ok">aceptado</span>'}</td>
+        <td>${escapeHtml((d.scopes || []).join(", ") || "—")}</td>
+        <td>${escapeHtml(d.expires_at ? formatDate(d.expires_at) : "—")}</td>
+      </tr>`)
+      .join("");
+  } catch (err) {
+    msg("consents-msg", err.message, "danger");
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Inicio
 // ---------------------------------------------------------------------------
 
@@ -1140,7 +1172,7 @@ async function init() {
   await loadAssets();
   const hash = location.hash.replace("#", "") || "assets";
   const [tab, query] = hash.split("?");
-  showTab(["assets", "types", "import", "states"].includes(tab) ? tab : "assets");
+  showTab(["assets", "types", "import", "states", "consents"].includes(tab) ? tab : "assets");
   if (query) {
     const params = new URLSearchParams(query);
     if (params.get("batch")) { $("a-batch").value = params.get("batch"); loadAssets(); }

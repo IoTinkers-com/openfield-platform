@@ -31,7 +31,7 @@ export function createDevice(deviceId = newId("dev"), hw = simulatedHardware()) 
   };
 }
 
-export async function startSession({ deviceId, assetId = null, operator = "operador" } = {}, hw = simulatedHardware()) {
+export async function startSession({ deviceId, assetId = null, operator = "operador", consent = null } = {}, hw = simulatedHardware()) {
   const caps = hw.capabilities();
   const loc = await hw.getLocation();
   return {
@@ -45,8 +45,8 @@ export async function startSession({ deviceId, assetId = null, operator = "opera
     ended_at: null,
     location: toPoint(loc),
     device_capabilities: { thermal_level: caps.thermal_level, gps: caps.gps, audio: caps.audio },
-    // D15: consentimiento + indicador de grabación antes de capturar.
-    consent: { recorded: true, method: "checkbox" },
+    // D15/ADR-0026: referencia al consentimiento aceptado (o checkbox si no se informa).
+    consent: consent || { recorded: true, method: "checkbox" },
     created_at: now(),
   };
 }

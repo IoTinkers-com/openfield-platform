@@ -47,7 +47,7 @@
 import {
   emptyState, escapeHtml, formatDate, mediaCard,
   apiPatch, searchAssetsApi, itemActions,
-} from "/static/js/dossier-common.js?v=c3";
+} from "/static/js/dossier-common.js?v=e3";
 
 const $ = (id) => document.getElementById(id);
 let showDeleted = false;
@@ -63,12 +63,17 @@ function renderSummary(session, asset) {
     $('crumb-asset').textContent = 'Sin activo';
     $('crumb-asset').removeAttribute('href');
   }
+  const consent = session.consent || {};
+  const consentLine = consent.record_id
+    ? `<p style="color:var(--of-text-muted)">Consentimiento: v${escapeHtml(consent.policy_version || '—')} · aceptado ${escapeHtml(formatDate(consent.granted_at))}</p>`
+    : '';
   $('session-summary').innerHTML = `
     <h1 class="of-section-title" style="font-size:1.4rem">Sesión ${formatDate(session.started_at)}</h1>
     <p style="color:var(--of-text-muted)">
       ${escapeHtml(session.id)} · operador: ${escapeHtml(session.operator || 'n/d')} ·
       dispositivo: ${escapeHtml(session.device_id)}
     </p>
+    ${consentLine}
     ${asset ? `<a class="of-nav-link secondary" href="/assets/${encodeURIComponent(asset.id)}">Ver expediente de ${escapeHtml(asset.name || asset.id)}</a>` : ''}
   `;
 }

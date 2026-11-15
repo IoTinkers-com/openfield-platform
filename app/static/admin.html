@@ -29,6 +29,7 @@
     <button class="of-tab" data-tab="types" type="button">Tipos de activo</button>
     <button class="of-tab" data-tab="import" type="button">Importar CSV</button>
     <button class="of-tab" data-tab="states" type="button">Estados</button>
+    <button class="of-tab" data-tab="consents" type="button">Consentimientos</button>
   </nav>
 
   <!-- ===================== Activos ===================== -->
@@ -181,6 +182,21 @@
         <thead><tr><th>Código</th><th>Etiqueta</th><th>Ámbito</th></tr></thead>
         <tbody></tbody>
       </table>
+    </section>
+  </section>
+
+  <!-- ===================== Consentimientos ===================== -->
+  <section id="tab-consents" style="display:none">
+    <section class="of-card">
+      <h2 class="of-section-title">Consentimientos (solo lectura)</h2>
+      <p class="of-progress-legend">Registro append-only del aviso de captura aceptado o revocado (ADR-0026).</p>
+      <div style="overflow-x:auto">
+        <table class="of-table">
+          <thead><tr><th>Fecha</th><th>Sujeto</th><th>Dispositivo</th><th>Aviso</th><th>Acción</th><th>Alcances</th><th>Vence</th></tr></thead>
+          <tbody id="consents-tbody"></tbody>
+        </table>
+      </div>
+      <p id="consents-msg" class="of-status"></p>
     </section>
   </section>
 </main>

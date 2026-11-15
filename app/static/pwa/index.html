@@ -21,20 +21,29 @@
 
 <main class="of-shell">
   <div id="status" class="of-status"></div>
+  <div id="rec-indicator" class="of-rec" hidden>● Grabando</div>
 
-  <!-- Inicio: consentimiento y puerta de entrada -->
+  <!-- Inicio: puerta de entrada -->
   <section data-screen="/inicio" class="of-card">
     <h2 class="of-section-title">Captura en terreno</h2>
-    <div class="of-consent-row">
-      <label><input type="checkbox" id="consent"> Acepto el registro de captura</label>
-      <span class="of-badge" id="indicator-badge"><span class="of-dot" id="indicator"></span> Grabación: inactiva</span>
-    </div>
+    <p id="consent-state-home" class="of-status"></p>
     <div class="of-actions">
       <button id="go-assets" class="of-btn primary">Elegir activo</button>
       <button id="go-queue" class="of-btn">Ver cola</button>
       <button id="go-settings" class="of-btn">Ajustes</button>
     </div>
     <p class="of-status">Flujo por pantallas: el botón/gesto Atrás del teléfono vuelve al paso anterior.</p>
+  </section>
+
+  <!-- Aviso de captura y aceptación (ADR-0026) -->
+  <section data-screen="/consentimiento" class="of-card" hidden>
+    <h2 class="of-section-title">Aviso de captura</h2>
+    <p id="notice-text" class="of-status"></p>
+    <label class="of-consent-row"><input type="checkbox" id="notice-ack"> He leído y acepto el aviso</label>
+    <div class="of-actions">
+      <button id="notice-accept" class="of-btn primary" disabled>Aceptar y continuar</button>
+      <button id="notice-cancel" class="of-btn">Ahora no</button>
+    </div>
   </section>
 
   <!-- Ajustes -->
@@ -50,6 +59,11 @@
     <div class="of-field">
       <label for="rec-max">Tope de nota de voz (minutos)</label>
       <input id="rec-max" type="number" min="1" max="30" value="5" style="width:4rem">
+    </div>
+    <h3 class="of-section-title" style="margin-top:var(--of-space-4)">Consentimiento</h3>
+    <p id="consent-state" class="of-status"></p>
+    <div class="of-actions">
+      <button id="consent-revoke" class="of-btn danger" hidden>Revocar consentimiento</button>
     </div>
     <p class="of-status">Para dictar comentarios usa el micrófono del teclado del teléfono.
     En Android, descarga el idioma en Gboard para dictar sin conexión.</p>
@@ -215,6 +229,10 @@ import { createRouter } from "./router.js";
 import { createWizard, saveDraft, loadDraft, clearDraft } from "./wizard.js";
 import { mountWizard } from "./wizard-ui.js";
 import {
+  POLICY, consentStatus, buildConsentRecord, sessionConsentRef,
+  loadConsent, saveConsent, NOTICE_TEXT,
+} from "./consent.js";
+import {
   loadCatalog, searchAssets, tagsByAsset, findAssetByTag,
   parseValue, applyVerificationLocally,
   buildVerifyPayload, newFieldAsset, relevantAttrs, activeAttrs,
@@ -256,6 +274,8 @@ let pendingAudio = null;   // { blob, durationMs, mimeType } a la espera de tran
 let qrCam = null;
 let qrActive = false;
 let syncing = false;
+let consent = null;         // consent-record vigente (ADR-0026)
+let consentReturn = null;   // ruta pedida antes de pasar por el aviso
 const deviceId = localStorage.getItem("of.deviceId") || newId("dev");
 localStorage.setItem("of.deviceId", deviceId);
 
@@ -265,6 +285,60 @@ const log = (msg) => {
   el.textContent += msg + "\n";
   el.scrollTop = el.scrollHeight;
 };
+
+// --- Consentimiento (ADR-0026) ---
+
+function consentSubjectId() {
+  return ($("operator").value || "").trim() || "operador";
+}
+
+function consentState() {
+  return consentStatus(consent, POLICY, now(), { subjectId: consentSubjectId() });
+}
+
+function consentOk() {
+  return consentState() === "valid";
+}
+
+const CONSENT_LABELS = {
+  missing: "Consentimiento pendiente: acepta el aviso para capturar.",
+  expired: "El consentimiento venció: acéptalo de nuevo para capturar.",
+  version_changed: "El aviso de captura cambió: acéptalo de nuevo.",
+  revoked: "Consentimiento revocado: no puedes capturar hasta aceptarlo de nuevo.",
+  valid: "",
+};
+
+function renderConsentState() {
+  const st = consentState();
+  let text = CONSENT_LABELS[st] || "";
+  if (st === "valid") {
+    const accepted = (consent.occurred_at || "").slice(0, 10);
+    const expires = (consent.expires_at || "").slice(0, 10);
+    text = `Consentimiento aceptado (v${consent.policy_version}) el ${accepted} · vence ${expires}`;
+  }
+  const home = $("consent-state-home");
+  const settings = $("consent-state");
+  if (home) home.textContent = text;
+  if (settings) settings.textContent = text;
+  const revoke = $("consent-revoke");
+  if (revoke) revoke.hidden = st !== "valid";
+}
+
+// Exige consentimiento vigente para las rutas de captura.
+function requireConsent(target) {
+  if (consentOk()) return true;
+  consentReturn = target;
+  router.navigate("/consentimiento");
+  return false;
+}
+
+// Indicador de grabación siempre visible (ADR-0026): no depende del consentimiento.
+function setRecIndicator(label) {
+  const el = $("rec-indicator");
+  if (!el) return;
+  el.hidden = !label;
+  if (label) el.textContent = label;
+}
 
 function friendlyError(e) {
   const name = e && e.name;
@@ -402,7 +476,12 @@ async function openAssetSession(asset) {
   if (session && session.asset_id !== asset.id) await closeSessionIfOpen();
   if (!session) {
     session = await startSession(
-      { deviceId, assetId: asset.id, operator: $("operator").value || "operador" },
+      {
+        deviceId,
+        assetId: asset.id,
+        operator: $("operator").value || "operador",
+        consent: consent ? sessionConsentRef(consent) : null,
+      },
       hw,
     );
     await queue.enqueue({ kind: "doc", entity: "device", doc: createDevice(deviceId, hw) });
@@ -540,6 +619,7 @@ async function openCameraScreen() {
     lastFix = null;
     stopWatch = hw.watchLocation ? hw.watchLocation((f) => { lastFix = f; }) : null;
     updatePhotoCountBadge();
+    setRecIndicator("● Cámara activa");
   } catch (e) {
     setStatus("❌ " + friendlyError(e), "danger");
     log("cámara no disponible: " + e.message);
@@ -596,6 +676,7 @@ function stopCamera() {
   cam = null;
   torchOn = false;
   $("preview").srcObject = null;
+  setRecIndicator(recording ? "● Grabando audio" : "");
 }
 
 async function shutter() {
@@ -690,7 +771,7 @@ async function cancelRecording() {
   recording = null;
   $("rec-toggle").textContent = "● Grabar nota de voz";
   $("rec-toggle").className = "of-btn";
-  $("indicator").parentElement.classList.remove("live");
+  setRecIndicator("");
   $("rec-timer").textContent = "";
   log("grabación descartada al salir de la pantalla");
 }
@@ -706,7 +787,7 @@ async function toggleRecording() {
       });
       btn.textContent = "■ Detener";
       btn.className = "of-btn danger";
-      $("indicator").parentElement.classList.add("live");
+      setRecIndicator("● Grabando audio");
       setStatus("🔴 Grabando nota de voz…", "warn");
     } catch (e) {
       setStatus("❌ " + friendlyError(e), "danger");
@@ -718,7 +799,7 @@ async function toggleRecording() {
   recording = null;
   btn.textContent = "● Grabar nota de voz";
   btn.className = "of-btn";
-  $("indicator").parentElement.classList.remove("live");
+  setRecIndicator("");
   $("rec-timer").textContent = "";
   pendingAudio = out;
   if (out.autoStopped) setStatus("⏱️ Se alcanzó el tope de grabación.", "warn");
@@ -806,6 +887,7 @@ async function startQr() {
     qrCam = await hw.openCamera({});
     $("qr-video").srcObject = qrCam.stream;
     $("qr-status").textContent = "Apunta la cámara al código…";
+    setRecIndicator("● Cámara activa");
     const detector = new BarcodeDetector({ formats: ["qr_code"] });
     const deadline = Date.now() + 30000;
     while (qrActive && Date.now() < deadline) {
@@ -832,6 +914,7 @@ function stopQr() {
   if (qrCam?.stream) qrCam.stream.getTracks().forEach((t) => t.stop());
   qrCam = null;
   $("qr-video").srcObject = null;
+  setRecIndicator(recording ? "● Grabando audio" : "");
 }
 
 async function resolveAndSelect(value) {
@@ -1203,6 +1286,10 @@ async function onScreenShow(path, prev, param) {
     case "/cola":
       await renderQueue();
       break;
+    case "/consentimiento":
+      $("notice-ack").checked = false;
+      $("notice-accept").disabled = true;
+      break;
   }
 }
 
@@ -1229,12 +1316,12 @@ const router = createRouter({
     "/activo/comentario": () => (currentAsset ? null : "/activos"),
     "/activo/camara": () => {
       if (!currentAsset) return "/activos";
-      return $("consent").checked ? null : "/inicio";
+      return consentOk() ? null : "/consentimiento";
     },
     "/activo/camara/confirmar": () => (pendingPhoto ? null : "/activo/camara"),
     "/activo/voz": () => {
       if (!currentAsset) return "/activos";
-      return $("consent").checked ? null : "/inicio";
+      return consentOk() ? null : "/consentimiento";
     },
     "/activos/nuevo": (param) => (param && NA_STEPS.includes(param) ? null : `/activos/nuevo/${NA_STEPS[0]}`),
   },
@@ -1250,13 +1337,42 @@ $("go-assets").addEventListener("click", () => router.navigate("/activos"));
 $("go-queue").addEventListener("click", () => router.navigate("/cola"));
 $("go-settings").addEventListener("click", () => router.navigate("/ajustes"));
 
-$("consent").addEventListener("change", () => {
-  const on = $("consent").checked;
-  $("indicator").parentElement.classList.toggle("live", on);
-  $("indicator-badge").lastChild.textContent = on ? " Grabación: consentida" : " Grabación: inactiva";
+// Aviso de captura (ADR-0026): se acepta una vez y se registra.
+$("notice-text").textContent = NOTICE_TEXT;
+$("notice-ack").addEventListener("change", () => {
+  $("notice-accept").disabled = !$("notice-ack").checked;
+});
+$("notice-cancel").addEventListener("click", () => {
+  setStatus("⚠️ Sin consentimiento no se puede capturar.", "warn");
+  router.navigate("/inicio", { replace: true });
+});
+$("notice-accept").addEventListener("click", async () => {
+  consent = buildConsentRecord({ operator: consentSubjectId(), deviceId });
+  await saveConsent(store, consent);
+  await queue.enqueue({ kind: "doc", entity: "consent-record", doc: consent });
+  renderConsentState();
+  $("notice-ack").checked = false;
+  $("notice-accept").disabled = true;
+  setStatus("✅ Consentimiento registrado.", "ok");
+  log("consentimiento aceptado: v" + consent.policy_version);
+  const target = consentReturn || "/inicio";
+  consentReturn = null;
+  router.navigate(target, { replace: true });
+});
+$("consent-revoke").addEventListener("click", async () => {
+  if (!confirm("¿Revocar el consentimiento? No podrás capturar hasta aceptarlo de nuevo.")) return;
+  consent = buildConsentRecord({ operator: consentSubjectId(), deviceId, action: "revoke", method: "settings" });
+  await saveConsent(store, consent);
+  await queue.enqueue({ kind: "doc", entity: "consent-record", doc: consent });
+  renderConsentState();
+  setStatus("Consentimiento revocado.", "warn");
+  log("consentimiento revocado");
 });
 $("operator").value = localStorage.getItem("of.operator") || "";
-$("operator").addEventListener("change", () => localStorage.setItem("of.operator", $("operator").value));
+$("operator").addEventListener("change", () => {
+  localStorage.setItem("of.operator", $("operator").value);
+  renderConsentState();
+});
 $("keep-audio").checked = localStorage.getItem("of.keepAudio") === "1";
 $("keep-audio").addEventListener("change", () => localStorage.setItem("of.keepAudio", $("keep-audio").checked ? "1" : "0"));
 $("rec-max").value = localStorage.getItem("of.recMax") || "5";
@@ -1276,20 +1392,10 @@ $("new-asset").addEventListener("click", () => router.navigate("/activos/nuevo")
 
 $("menu-verify").addEventListener("click", () => router.navigate("/activo/verificar"));
 $("menu-photos").addEventListener("click", () => {
-  if (!$("consent").checked) {
-    setStatus("⚠️ Acepta el consentimiento en Inicio antes de capturar.", "warn");
-    router.navigate("/inicio");
-    return;
-  }
-  router.navigate("/activo/camara");
+  if (requireConsent("/activo/camara")) router.navigate("/activo/camara");
 });
 $("menu-voice").addEventListener("click", () => {
-  if (!$("consent").checked) {
-    setStatus("⚠️ Acepta el consentimiento en Inicio antes de capturar.", "warn");
-    router.navigate("/inicio");
-    return;
-  }
-  router.navigate("/activo/voz");
+  if (requireConsent("/activo/voz")) router.navigate("/activo/voz");
 });
 $("menu-comment").addEventListener("click", () => router.navigate("/activo/comentario"));
 $("end-session").addEventListener("click", async () => {
@@ -1328,11 +1434,7 @@ $("verify-form").addEventListener("input", (e) => {
 $("save-verify").addEventListener("click", saveVerification);
 $("goto-plate").addEventListener("click", () => {
   presetCategory = "placa";
-  if (!$("consent").checked) {
-    setStatus("⚠️ Acepta el consentimiento en Inicio antes de capturar.", "warn");
-    router.navigate("/inicio");
-    return;
-  }
+  if (!requireConsent("/activo/camara")) return;
   router.navigate("/activo/camara");
 });
 
@@ -1392,6 +1494,10 @@ updateConnectionBadge();
 if (!storePersistent) {
   setStatus("⚠️ Almacenamiento local no disponible: la cola se perderá al cerrar la página.", "warn");
 }
+try {
+  consent = await loadConsent(store);
+} catch (e) { log("consentimiento: " + e.message); }
+renderConsentState();
 await renderQueue();
 await refreshCatalog();
 
