@@ -15,6 +15,9 @@ El contrato de datos vive en `schemas/` (fuente de verdad).
 ## Terminado
 - `python scripts/validate_schemas.py` pasa.
 - `pytest` pasa.
+- Si se tocó la PWA (`app/static/pwa/` o `app/static/js/`), `node scripts/e2e_pwa.mjs`
+  pasa contra un servidor aislado (ver README): cubre consentimiento, captura, bandeja,
+  asignación, visitas, cierre y sincronización en un navegador real.
 
 ## Referencias del plan
 Paquete de planificación en `../openfield-planning/`: `AGENTS.md`, `DECISIONS.md`,

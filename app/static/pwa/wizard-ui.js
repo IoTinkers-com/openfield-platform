@@ -26,6 +26,7 @@ export function mountWizard(root, wiz, {
   root.querySelector(".of-wizard-title").textContent = title;
 
   function render() {
+    if (!root.querySelector(".of-wizard")) return; // el wizard ya se cerró/destruyó
     const step = wiz.current();
     const { n, m } = wiz.progress();
     root.querySelector(".of-wizard-count").textContent = `Paso ${n} de ${m}`;
@@ -41,9 +42,18 @@ export function mountWizard(root, wiz, {
     const res = wiz.next();
     if (!res.ok) { q("error").textContent = res.error; return; }
     if (res.done) {
-      q("next").disabled = true;
-      try { await onFinish(wiz.data); } catch (e) { q("error").textContent = e.message || String(e); }
-      finally { q("next").disabled = false; }
+      // onFinish puede cerrar y destruir el wizard: no tocar el DOM después sin comprobar.
+      const btn = q("next");
+      if (btn) btn.disabled = true;
+      try {
+        await onFinish(wiz.data);
+      } catch (e) {
+        const err = q("error");
+        if (err) err.textContent = e.message || String(e);
+      } finally {
+        const again = q("next");
+        if (again) again.disabled = false;
+      }
       return;
     }
     onStepChange(wiz.current().id, "next");

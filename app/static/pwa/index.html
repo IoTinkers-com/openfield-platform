@@ -37,7 +37,7 @@
       <button id="go-settings" class="of-btn">Ajustes</button>
     </div>
     <p class="of-status">Flujo por pantallas: el botón/gesto Atrás del teléfono vuelve al paso anterior.</p>
-    <p class="of-status" id="build">build e6.2</p>
+    <p class="of-status" id="build">build e6.3</p>
   </section>
 
   <!-- Aviso de captura y aceptación (ADR-0026) -->
@@ -278,7 +278,7 @@ import { newId, now } from "./ids.js";
 import { createIndexedDbStore, createMemoryStore, blobToStored, storedToBlob } from "./store.js";
 import { createPersistentQueue, sessionOf, summarize } from "./queue.js";
 import {
-  currentVisit, closedVisits, openVisit, closeVisit, markSynced, staleVisit,
+  currentVisit, closedVisits, openVisit, closeVisit, markSynced, pruneSynced, staleVisit,
   assignDrafts, nearbyAssets, legacyVisits, describeCounts, sumCounts,
 } from "./visits.js";
 import { createRouter } from "./router.js";
@@ -791,7 +791,7 @@ async function photosPending() {
 }
 
 // Banner de visita en curso (ADR-0027).
-const NO_BANNER = ["/camara", "/camara/confirmar", "/inspeccionar/qr", "/visita", "/visita/verificar", "/visita/cerrar", "/visita/cerrada", "/consentimiento"];
+const NO_BANNER = ["/camara", "/camara/confirmar", "/inspeccionar/qr", "/visita", "/visita/verificar", "/visita/cerrar", "/visita/cerrada", "/consentimiento", "/equipos/nuevo", "/asignar", "/bandeja", "/capturar"];
 
 async function renderBanner(path = router.current) {
   const el = $("visit-banner");
@@ -1909,8 +1909,11 @@ const screens = {};
 document.querySelectorAll("[data-screen]").forEach((el) => { screens[el.dataset.screen] = el; });
 
 async function onScreenShow(path, prev, param) {
-  $("hdr-back").hidden = path === "/inicio";
-  switch (path) {
+  // Las rutas con parámetro (/asignar/<paso>, /equipos/nuevo/<paso>) comparten pantalla:
+  // el switch debe usar la base, no la ruta completa.
+  const base = router.base || path;
+  $("hdr-back").hidden = base === "/inicio";
+  switch (base) {
     case "/inicio":
       await renderHome();
       break;
@@ -1963,7 +1966,7 @@ async function onScreenShow(path, prev, param) {
       $("notice-accept").disabled = true;
       break;
   }
-  await renderBanner(path);
+  await renderBanner(base);
 }
 
 // Rutas auxiliares a las que se entra desde el wizard de asignación sin abandonarlo.
@@ -2016,9 +2019,20 @@ const router = createRouter({
     "/visita/cerrar": () => (currentVisit(visits) ? null : "/inspeccionar"),
     "/visita/cerrada": () => (lastClosed ? null : "/inicio"),
     "/texto": () => null,
-    "/camara": () => (consentOk() ? null : "/consentimiento"),
+    "/capturar": () => {
+      if (consentOk()) return null;
+      consentReturn = "/capturar";
+      return "/consentimiento";
+    },
+    "/camara": () => {
+      if (!consentOk()) { consentReturn = "/camara"; return "/consentimiento"; }
+      return null;
+    },
     "/camara/confirmar": () => (pendingPhoto ? null : "/camara"),
-    "/voz": () => (consentOk() ? null : "/consentimiento"),
+    "/voz": () => {
+      if (!consentOk()) { consentReturn = "/voz"; return "/consentimiento"; }
+      return null;
+    },
     "/asignar": (param) => {
       if (!(param && ASSIGN_STEPS.includes(param))) return `/asignar/${ASSIGN_STEPS[0]}`;
       return null;

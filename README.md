@@ -28,6 +28,23 @@ python scripts/seed.py
 pytest
 ```
 
+## Prueba end-to-end de la PWA (navegador real)
+Ejercita la interfaz con Chrome/Edge headless (cámara simulada) por DevTools Protocol:
+consentimiento, captura, bandeja, asignación a equipo nuevo, visita, cierre, sincronización
+por visita, recarga con visita abierta, revocación del consentimiento y wizard del panel admin.
+
+```sh
+# 1) servidor aislado con BD temporal (no toca la de desarrollo)
+$env:DATABASE_URL="sqlite:///./e2e.db"; $env:MEDIA_DIR="data/e2e_media"
+uvicorn app.main:app --port 8013
+# 2) datos de demo
+$env:OPENFIELD_BASE_URL="http://localhost:8013"; python scripts/seed.py
+# 3) ejecutar el arnés
+node scripts/e2e_pwa.mjs        # E2E_BASE=http://localhost:8013 por defecto
+```
+Requiere Node ≥ 22 (usa `WebSocket` global) y Chrome o Edge instalados
+(`CHROME_PATH` para indicar otro ejecutable). Sale con código 1 si alguna comprobación falla.
+
 ## Validar esquemas
 ```sh
 python scripts/validate_schemas.py
