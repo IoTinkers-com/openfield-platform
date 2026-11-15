@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://iotinkers.com/openfield/schema/consent-record.schema.json",
+  "title": "ConsentRecord",
+  "description": "Registro append-only de aceptación o revocación del aviso de captura (ADR-0026). Nunca se edita ni se borra: una revocación es un registro nuevo.",
+  "type": "object",
+  "required": ["schema_version", "tenant_id", "id", "subject", "policy_id", "policy_version", "action", "occurred_at"],
+  "properties": {
+    "schema_version": { "type": "string", "description": "Versión del esquema. Solo se agregan campos; nunca se rompen (D9)." },
+    "tenant_id": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Tenant (multiempresa, D13)." },
+    "id": { "type": "string", "minLength": 1, "maxLength": 100, "description": "UUID generado en el dispositivo (offline-first, D4)." },
+    "subject": {
+      "type": "object",
+      "description": "Quién acepta o revoca. Hoy `operator` (nombre + dispositivo); con H-AUTH pasa a `user`.",
+      "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "enum": ["operator", "user"] },
+        "id": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "display_name": { "type": ["string", "null"], "maxLength": 200 }
+      }
+    },
+    "device_id": { "type": ["string", "null"], "maxLength": 100, "description": "Dispositivo donde se aceptó o revocó." },
+    "policy_id": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Identificador del aviso de captura." },
+    "policy_version": { "type": "string", "minLength": 1, "maxLength": 40, "description": "Versión del aviso aceptada; si cambia, se pide de nuevo." },
+    "action": { "type": "string", "enum": ["grant", "revoke"] },
+    "scopes": {
+      "type": "array",
+      "description": "Alcances aceptados. Con H-AUTH se ligan a los permisos del rol.",
+      "maxItems": 10,
+      "uniqueItems": true,
+      "items": { "type": "string", "enum": ["image", "audio", "video", "location", "text"] }
+    },
+    "method": { "type": "string", "maxLength": 40, "description": "Cómo se obtuvo (p. ej. 'checkbox')." },
+    "occurred_at": { "type": "string", "format": "date-time", "description": "Momento de la aceptación o revocación (reloj del dispositivo)." },
+    "expires_at": { "type": ["string", "null"], "format": "date-time", "description": "Vencimiento del consentimiento (ADR-0026). Null en una revocación." },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

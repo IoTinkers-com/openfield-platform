@@ -7,6 +7,7 @@ from .config import SCHEMAS_DIR
 
 ENTITY_TYPES = [
     "session",
+    "consent-record",
     "device",
     "asset",
     "asset-type",

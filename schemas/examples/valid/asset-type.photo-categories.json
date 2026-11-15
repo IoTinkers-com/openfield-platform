@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "tenant_id": "tenant-001",
+  "id": "atype-tablero",
+  "name": "Tablero eléctrico",
+  "equipment_class": "electrical/panel",
+  "description": null,
+  "active": true,
+  "attributes": [
+    {
+      "key": "tension_nominal_v",
+      "label": "Tensión nominal",
+      "type": "number",
+      "unit": "V",
+      "required": true,
+      "options": null,
+      "active": true,
+      "order": 0,
+      "verify_in_field": true
+    }
+  ],
+  "photo_categories": [
+    { "key": "placa", "label": "Placa de datos", "active": true },
+    { "key": "protecciones", "label": "Protecciones", "active": true },
+    { "key": "general", "label": "Vista general", "active": true },
+    { "key": "hallazgo", "label": "Hallazgo / anomalía", "active": true },
+    { "key": "vieja", "label": "Categoría retirada", "active": false }
+  ],
+  "created_at": "2026-11-11T10:00:00Z",
+  "updated_at": null
+}

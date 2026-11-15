@@ -37,7 +37,10 @@
       "description": "Registro de consentimiento de captura (D15).",
       "properties": {
         "recorded": { "type": "boolean" },
-        "method": { "type": "string", "description": "Cómo se obtuvo (p. ej. 'checkbox', 'verbal')." }
+        "method": { "type": "string", "description": "Cómo se obtuvo (p. ej. 'checkbox', 'verbal', 'stored')." },
+        "record_id": { "type": ["string", "null"], "maxLength": 100, "description": "consent-record aceptado vigente al iniciar la sesión (ADR-0026)." },
+        "policy_version": { "type": ["string", "null"], "maxLength": 40 },
+        "granted_at": { "type": ["string", "null"], "format": "date-time" }
       },
       "required": ["recorded"]
     },
