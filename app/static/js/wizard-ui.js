@@ -44,7 +44,11 @@ export function mountWizard(root, wiz, {
     if (res.done) {
       // onFinish puede cerrar y destruir el wizard: no tocar el DOM después sin comprobar.
       const btn = q("next");
-      if (btn) btn.disabled = true;
+      const label = btn ? btn.textContent : finishLabel;
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="of-spin"></span> ${label}`;
+      }
       try {
         await onFinish(wiz.data);
       } catch (e) {
@@ -52,7 +56,10 @@ export function mountWizard(root, wiz, {
         if (err) err.textContent = e.message || String(e);
       } finally {
         const again = q("next");
-        if (again) again.disabled = false;
+        if (again) {
+          again.disabled = false;
+          again.textContent = label;
+        }
       }
       return;
     }

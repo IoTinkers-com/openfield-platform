@@ -37,7 +37,7 @@
       <button id="go-settings" class="of-btn">Ajustes</button>
     </div>
     <p class="of-status">Flujo por pantallas: el botón/gesto Atrás del teléfono vuelve al paso anterior.</p>
-    <p class="of-status" id="build">build e6.6</p>
+    <p class="of-status" id="build">build e6.7</p>
   </section>
 
   <!-- Aviso de captura y aceptación (ADR-0026) -->
@@ -185,6 +185,7 @@
   <!-- Cámara a pantalla completa -->
   <section data-screen="/camara" class="of-cam" hidden>
     <video id="preview" autoplay playsinline muted></video>
+    <div id="cam-loading" class="of-cam-loading"><span class="of-spin"></span> Abriendo cámara…</div>
     <div class="of-cam-top">
       <button id="cam-back" class="of-cam-btn" type="button" title="Volver">✕</button>
       <div class="of-cam-title">
@@ -226,6 +227,7 @@
     <div class="of-actions">
       <button id="rec-toggle" class="of-btn">● Grabar nota de voz</button>
       <span id="rec-timer" class="of-status"></span>
+      <span id="rec-spin" class="of-status" hidden><span class="of-spin"></span> Transcribiendo…</span>
     </div>
     <div id="transcript-area" hidden>
       <div class="of-field">
@@ -481,6 +483,15 @@ let syncResults = {}; // sessionId -> { synced, failed, last_error }
 let syncAfterClose = false;
 let lastDiag = "";
 
+// Marca la visita que se está enviando (spinner) y deja las demás «en cola».
+function markSyncing(sid) {
+  document.querySelectorAll("#sync-cards [data-badge]").forEach((el) => {
+    const card = el.closest(".of-card");
+    const active = card && card.id === `sync-card-${sid}`;
+    el.innerHTML = active ? '<span class="of-spin"></span> enviando…' : "en cola";
+  });
+}
+
 async function renderSync() {
   const items = await queue.list();
   const s = summarize(items);
@@ -503,15 +514,21 @@ async function renderSync() {
   $("sync-summary").textContent = summary;
   const btn = $("sync-all");
   const canCloseAndSync = Boolean(open && openCounts && openCounts.total);
-  if (closed.length) {
-    btn.textContent = `⤒ Sincronizar ${plural(closed.length, "visita", "visitas")}`;
-  } else if (canCloseAndSync) {
-    btn.textContent = "Cerrar visita y sincronizar";
+  if (syncing) {
+    btn.innerHTML = '<span class="of-spin"></span> Sincronizando…';
+    btn.disabled = true;
+    btn.dataset.mode = "sync";
   } else {
-    btn.textContent = "⤒ Sincronizar";
+    if (closed.length) {
+      btn.textContent = `⤒ Sincronizar ${plural(closed.length, "visita", "visitas")}`;
+    } else if (canCloseAndSync) {
+      btn.textContent = "Cerrar visita y sincronizar";
+    } else {
+      btn.textContent = "⤒ Sincronizar";
+    }
+    btn.disabled = (!closed.length && !orphans.size && !canCloseAndSync) || syncing;
+    btn.dataset.mode = !closed.length && canCloseAndSync ? "close" : "sync";
   }
-  btn.disabled = (!closed.length && !orphans.size && !canCloseAndSync) || syncing;
-  btn.dataset.mode = !closed.length && canCloseAndSync ? "close" : "sync";
 
   const box = $("sync-cards");
   box.innerHTML = "";
@@ -572,6 +589,7 @@ async function renderSync() {
 function visitCard(v, items, counts) {
   const card = document.createElement("div");
   card.className = "of-card";
+  card.id = `sync-card-${v.id}`;
   card.style.marginBottom = "var(--of-space-2)";
   const res = syncResults[v.id];
   const stateBadge = v.state === "open"
@@ -582,7 +600,7 @@ function visitCard(v, items, counts) {
         ? `<span class="of-badge danger">⚠ ${res.failed} fallidos</span>`
         : '<span class="of-badge">pendiente</span>';
   card.innerHTML = `<div class="of-actions" style="margin:0; justify-content:space-between">
-      <strong>${escapeHtml(v.asset_name)}</strong> ${stateBadge}</div>
+      <strong>${escapeHtml(v.asset_name)}</strong> <span data-badge>${stateBadge}</span></div>
     <div class="of-popup-id">${escapeHtml((v.started_at || "").slice(11, 16))}–${escapeHtml((v.ended_at || "").slice(11, 16) || "…")} · ${escapeHtml(describeCounts(counts))}</div>
     ${res && res.last_error ? `<div class="of-popup-id">${escapeHtml(res.last_error)}</div>` : ""}`;
 
@@ -668,11 +686,16 @@ function renderAssetList() {
 }
 
 async function refreshCatalog() {
+  const info = $("catalog-info");
+  const previous = info ? info.textContent : "";
+  if (info) info.innerHTML = '<span class="of-spin"></span> Actualizando catálogo…';
   try {
     catalog = await loadCatalog({ baseUrl: BASE_URL, store, tenantId: TENANT_ID });
   } catch (e) {
     log("catálogo: " + e.message);
-    $("catalog-info").textContent = "No se pudo cargar el catálogo: " + e.message;
+    if (info) info.textContent = "No se pudo cargar el catálogo: " + e.message;
+    else if (previous) info.textContent = previous;
+    return;
   }
   renderCatalogInfo();
   renderAssetList();
@@ -1253,10 +1276,12 @@ async function openCameraScreen() {
     updatePhotoCountBadge();
     return;
   }
+  $("cam-loading").hidden = false;
   try {
     const savedId = localStorage.getItem("of.cameraId");
     cam = await hw.openCamera({ deviceId: savedId || null });
     $("preview").srcObject = cam.stream;
+    $("cam-loading").hidden = true;
     cameras = await hw.listCameras().catch(() => []);
     camIndex = Math.max(0, cameras.findIndex((c) => c.deviceId === savedId));
     torchOn = false;
@@ -1269,6 +1294,7 @@ async function openCameraScreen() {
     updatePhotoCountBadge();
     setRecIndicator("● Cámara activa");
   } catch (e) {
+    $("cam-loading").hidden = true;
     setStatus("❌ " + friendlyError(e), "danger");
     log("cámara no disponible: " + e.message);
     router.navigate("/visita");
@@ -1477,6 +1503,7 @@ async function toggleRecording() {
   if (navigator.onLine) {
     try {
       setStatus("⏳ Transcribiendo…");
+      $("rec-spin").hidden = false;
       const res = await transcribeAudio(out.blob, BASE_URL, { language: "es" });
       $("transcript-edit").value = res.text || "(sin transcripción)";
       $("transcript-area").hidden = false;
@@ -1484,6 +1511,8 @@ async function toggleRecording() {
       return;
     } catch (e) {
       log("transcripción directa falló: " + e.message + " — se encola el audio");
+    } finally {
+      $("rec-spin").hidden = true;
     }
   }
   await enqueueAudioItem(out);
@@ -1941,7 +1970,10 @@ async function syncVisits(ids) {
   try {
     setStatus("⏳ Sincronizando…");
     await renderQueue(); // bloquea las acciones de ítems durante el flush
-    const res = await queue.flushBySession(syncItem, ids);
+    const res = await queue.flushBySession(async (item) => {
+      markSyncing(sessionOf(item));
+      return syncItem(item);
+    }, ids);
     log(`sincronización: ${res.synced} ok, ${res.failed} fallidos`);
     const done = [];
     for (const sid of ids) {

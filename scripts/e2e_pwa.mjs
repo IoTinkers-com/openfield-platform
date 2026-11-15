@@ -215,6 +215,8 @@ async function main() {
     await waitFor("location.hash === '#/camara'", "cámara");
     const videoOk = await waitFor("(() => { const v = document.querySelector('#preview'); return v && v.videoWidth > 0; })()", "stream de cámara");
     check("la cámara abre y entrega frames", Boolean(videoOk));
+    const camLoadingHidden = await js("(() => { const el = document.querySelector('#cam-loading'); return !!el && el.hidden; })()");
+    check("el indicador de «abriendo cámara» desaparece al abrir", Boolean(camLoadingHidden));
     await click("#cam-shutter");
     await waitFor("location.hash === '#/camara/confirmar'", "confirmación");
     await fill("#conf-caption", CAPTION);
@@ -320,6 +322,15 @@ async function main() {
     await waitFor("document.querySelector('#sync-summary').textContent.length > 10", "resumen de sincronización");
     const syncSummary = await text("#sync-summary");
     check("el resumen indica una visita cerrada", /1 visita cerrada/.test(syncSummary || ""), syncSummary);
+    // Observa el botón para comprobar que muestra progreso y luego lo retira.
+    await js(`(() => {
+      window.__spinSeen = 0;
+      const b = document.querySelector('#sync-all');
+      const obs = new MutationObserver(() => { if (b.querySelector('.of-spin')) window.__spinSeen += 1; });
+      obs.observe(b, { childList: true, subtree: true, characterData: true });
+      window.__spinObs = obs;
+      return true;
+    })()`);
     await click("#sync-all");
     let syncStatus = "";
     let syncOk = false;
@@ -338,6 +349,10 @@ async function main() {
       void items;
     }
     check("la sincronización reporta éxito", syncOk, syncStatus);
+    const spinSeen = await js("window.__spinSeen || 0");
+    const spinLeft = await js("document.querySelectorAll('#sync-all .of-spin').length");
+    check("el botón de sincronizar muestra progreso y lo retira", spinSeen > 0 && spinLeft === 0,
+      `${spinSeen} aparición(es), ${spinLeft} restante(s)`);
 
     // comprobación contra la API
     const docs = await (await fetch(`${BASE}/documents?entity_type=media-item&tenant_id=tenant-001`)).json();
@@ -501,6 +516,9 @@ async function main() {
     check("el tipo creado por el wizard queda en el registro", Boolean(typeOk));
 
     // ------------------------------------------------- errores de consola
+    await goto("#/inicio");
+    const stuck = await js("document.querySelectorAll('.of-spin').length");
+    check("no queda ningún indicador de progreso colgado", stuck === 0, `${stuck} indicador(es)`);
     check("sin errores de JavaScript en la sesión", errors.length === 0, errors.slice(0, 3).join(" | "));
   } catch (e) {
     check("ejecución completa del guion", false, e.message);
