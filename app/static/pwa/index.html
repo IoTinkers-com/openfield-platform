@@ -70,30 +70,9 @@
     <ul id="asset-list" class="of-list"></ul>
   </section>
 
-  <!-- Alta de activo en terreno -->
+  <!-- Alta de activo en terreno (wizard, ADR-0025) -->
   <section data-screen="/activos/nuevo" class="of-card" hidden>
-    <h2 class="of-section-title">Nuevo activo</h2>
-    <div class="of-field">
-      <label for="na-type">Tipo</label>
-      <select id="na-type"></select>
-    </div>
-    <div class="of-field">
-      <label for="na-name">Nombre *</label>
-      <input id="na-name" type="text" maxlength="200">
-    </div>
-    <div class="of-field">
-      <label for="na-tag">TAG</label>
-      <input id="na-tag" type="text" maxlength="120">
-    </div>
-    <div class="of-field">
-      <label for="na-status">Estado</label>
-      <select id="na-status"></select>
-    </div>
-    <div id="na-attrs"></div>
-    <div class="of-actions">
-      <button id="na-save" class="of-btn primary">Enrolar</button>
-      <button id="na-cancel" class="of-btn">Volver</button>
-    </div>
+    <div id="na-root"></div>
   </section>
 
   <!-- Escaneo de QR -->
@@ -233,12 +212,14 @@ import { newId, now } from "./ids.js";
 import { createIndexedDbStore, createMemoryStore, blobToStored, storedToBlob } from "./store.js";
 import { createPersistentQueue } from "./queue.js";
 import { createRouter } from "./router.js";
+import { createWizard, saveDraft, loadDraft, clearDraft } from "./wizard.js";
+import { mountWizard } from "./wizard-ui.js";
 import {
   loadCatalog, searchAssets, tagsByAsset, findAssetByTag,
   parseValue, applyVerificationLocally,
-  buildVerifyPayload, newFieldAsset, relevantAttrs,
+  buildVerifyPayload, newFieldAsset, relevantAttrs, activeAttrs,
 } from "./assets.js";
-import { statusBadge, verificationBadge, attrVerificationBadge, STATUS_LABELS, photoCategoriesFor, photoCategoryLabel } from "./labels.js";
+import { statusBadge, verificationBadge, attrVerificationBadge, photoCategoriesFor, photoCategoryLabel } from "./labels.js";
 
 const BASE_URL = "";
 const TENANT_ID = "tenant-001";
@@ -867,49 +848,152 @@ async function resolveAndSelect(value) {
   router.navigate("/activos");
 }
 
-// --- Nuevo activo ---
+// --- Nuevo activo: wizard de alta (ADR-0025) ---
 
-function renderNewAssetScreen() {
-  const types = catalog.types.filter((t) => t.active !== false);
-  $("na-type").innerHTML = types.map((t) => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("");
-  $("na-status").innerHTML = Object.entries(STATUS_LABELS)
-    .filter(([k]) => k !== "decommissioned")
-    .map(([k, v]) => `<option value="${k}"${k === "in_service" ? " selected" : ""}>${v}</option>`).join("");
-  renderNaAttrs();
+const NA_STEPS = ["tipo", "ident", "ficha", "revision"];
+let naWiz = null;
+let naUi = null;
+
+function naType() {
+  return catalog.types.find((t) => t.id === naWiz?.data.typeId) || null;
 }
 
-function renderNaAttrs() {
-  const type = catalog.types.find((t) => t.id === $("na-type").value);
-  const attrs = type ? relevantAttrs(type) : [];
-  $("na-attrs").innerHTML = attrs.map((a) =>
-    `<div class="of-field"><label for="na-${a.key}">${a.label || a.key}${a.unit ? ` (${a.unit})` : ""}</label>
-    <input id="na-${a.key}" type="text"${a.type === "number" ? ' inputmode="decimal"' : ""} maxlength="2000"></div>`,
-  ).join("");
+function naSet(patch) {
+  naWiz.set(patch);
+  saveDraft(store, "equipo", naWiz).catch(() => {});
 }
 
-async function saveNewAsset() {
-  const name = $("na-name").value.trim();
-  if (!name) { setStatus("❌ El nombre es obligatorio.", "danger"); return; }
-  const type = catalog.types.find((t) => t.id === $("na-type").value) || null;
-  const attrs = {};
-  const defs = Object.fromEntries((type?.attributes || []).map((a) => [a.key, a]));
-  try {
-    for (const el of $("na-attrs").querySelectorAll("input")) {
+function naSteps() {
+  return [
+    { id: "tipo", title: "¿Qué tipo de equipo es?", validate: (d) => (d.typeId === null ? "Elige un tipo (o «Sin tipo»)." : null) },
+    { id: "ident", title: "Identificación", validate: (d) => (d.name && d.name.trim() ? null : "Escribe un nombre.") },
+    {
+      id: "ficha",
+      title: "Ficha técnica",
+      skipIf: (d) => !d.typeId || !activeAttrs(catalog.types.find((t) => t.id === d.typeId) || {}).length,
+      validate: (d) => {
+        const type = catalog.types.find((t) => t.id === d.typeId);
+        const missing = activeAttrs(type)
+          .filter((a) => a.required)
+          .filter((a) => {
+            const v = (d.attrs || {})[a.key];
+            return v === undefined || v === null || String(v).trim() === "";
+          })
+          .map((a) => a.label || a.key);
+        return missing.length ? `Completa los obligatorios: ${missing.join(", ")}` : null;
+      },
+    },
+    { id: "revision", title: "Revisa y enrola", finishLabel: "Enrolar" },
+  ];
+}
+
+function naRenderStep(step, data, body, wiz, rerender) {
+  if (step.id === "tipo") {
+    const types = catalog.types.filter((t) => t.active !== false);
+    body.innerHTML = types.map((t) =>
+      `<button type="button" class="of-card-option${data.typeId === t.id ? " active" : ""}" data-t="${escapeHtml(t.id)}">${escapeHtml(t.name)}</button>`).join("")
+      + `<button type="button" class="of-card-option${data.typeId === "" ? " active" : ""}" data-t="">Sin tipo</button>`;
+    body.querySelectorAll("[data-t]").forEach((b) =>
+      b.addEventListener("click", () => { naSet({ typeId: b.dataset.t }); rerender(); }));
+    return;
+  }
+  if (step.id === "ident") {
+    body.innerHTML = `<div class="of-field"><label for="na-name">Nombre *</label>
+        <input id="na-name" maxlength="200" value="${escapeHtml(data.name || "")}"></div>
+      <div class="of-field"><label for="na-tag">TAG</label>
+        <input id="na-tag" maxlength="120" value="${escapeHtml(data.tag || "")}"></div>`;
+    const name = body.querySelector("#na-name");
+    const tag = body.querySelector("#na-tag");
+    name.addEventListener("input", () => naSet({ name: name.value }));
+    tag.addEventListener("input", () => naSet({ tag: tag.value }));
+    name.focus();
+    return;
+  }
+  if (step.id === "ficha") {
+    const type = naType();
+    const attrs = activeAttrs(type);
+    const required = attrs.filter((a) => a.required);
+    const optional = attrs.filter((a) => !a.required);
+    const input = (a) => `<div class="of-field"><label for="na-${a.key}">${escapeHtml(a.label || a.key)}${a.unit ? ` (${escapeHtml(a.unit)})` : ""}${a.required ? " *" : ""}</label>
+        <input id="na-${a.key}" type="text"${a.type === "number" ? ' inputmode="decimal"' : ""} maxlength="2000" value="${escapeHtml(String((data.attrs || {})[a.key] ?? ""))}"></div>`;
+    body.innerHTML = required.map(input).join("")
+      + (optional.length
+        ? `<details style="margin-top:var(--of-space-3)"><summary>Más atributos (opcional)</summary>${optional.map(input).join("")}</details>`
+        : "");
+    body.querySelectorAll("[id^='na-']").forEach((el) => {
       const key = el.id.replace(/^na-/, "");
-      const v = parseValue(defs[key], el.value);
-      if (v !== null) attrs[key] = v;
+      el.addEventListener("input", () => naSet({ attrs: { ...(data.attrs || {}), [key]: el.value } }));
+    });
+    return;
+  }
+  if (step.id === "revision") {
+    const type = naType();
+    const defs = activeAttrs(type);
+    const filled = defs
+      .filter((a) => {
+        const v = (data.attrs || {})[a.key];
+        return v !== undefined && v !== null && String(v).trim() !== "";
+      })
+      .map((a) => `${escapeHtml(a.label || a.key)}: ${escapeHtml(String(data.attrs[a.key]))}`);
+    body.innerHTML = `<div class="of-card">
+      <p><strong>Nombre:</strong> ${escapeHtml(data.name || "")}</p>
+      <p><strong>Tipo:</strong> ${escapeHtml(type?.name || "sin tipo")}</p>
+      <p><strong>TAG:</strong> ${escapeHtml(data.tag || "—")}</p>
+      <p><strong>Ficha:</strong> ${filled.join(" · ") || "—"}</p>
+      <p class="of-status">Se guardará con origen «terreno» y se enviará al sincronizar.</p>
+    </div>`;
+  }
+}
+
+async function ensureNaWizard() {
+  if (naWiz) return;
+  const draft = await loadDraft(store, "equipo");
+  let data = { typeId: null, name: "", tag: "", attrs: {} };
+  let stepId = null;
+  if (draft) {
+    if (confirm("Tienes un alta de equipo sin terminar. ¿Continuar donde la dejaste?")) {
+      data = draft.data;
+      stepId = draft.stepId;
+    } else {
+      await clearDraft(store, "equipo");
     }
-  } catch (e) { setStatus("❌ " + e.message, "danger"); return; }
+  }
+  naWiz = createWizard({ steps: naSteps(), data, stepId });
+  naUi = mountWizard($("na-root"), naWiz, {
+    title: "Nuevo equipo",
+    finishLabel: "Enrolar",
+    renderStep: naRenderStep,
+    onClose: () => router.navigate("/activos"),
+    onFinish: naFinish,
+    onStepChange: (id, dir) => {
+      saveDraft(store, "equipo", naWiz).catch(() => {});
+      if (dir === "next") router.navigate(`/activos/nuevo/${id}`);
+      else if (router.depth > 0) router.back();
+      else router.navigate(`/activos/nuevo/${id}`, { replace: true });
+    },
+  });
+}
+
+async function naFinish(data) {
+  const type = naType();
+  const defs = Object.fromEntries((type?.attributes || []).map((a) => [a.key, a]));
+  const attrs = {};
+  for (const [key, raw] of Object.entries(data.attrs || {})) {
+    const def = defs[key];
+    if (!def) continue;
+    const v = parseValue(def, raw);
+    if (v !== null) attrs[key] = v;
+  }
   const loc = await hw.getLocation();
   const { asset, identifier } = newFieldAsset({
     tenantId: TENANT_ID,
     id: newId("asset"),
     identId: newId("ident"),
     type,
-    name,
-    tag: $("na-tag").value.trim() || null,
+    name: data.name.trim(),
+    tag: (data.tag || "").trim() || null,
     attributes: attrs,
-    status: $("na-status").value,
+    status: "in_service",
     sessionId: session?.id || null,
     lon: loc?.lon ?? null,
     lat: loc?.lat ?? null,
@@ -919,8 +1003,11 @@ async function saveNewAsset() {
   catalog.assets.push(asset);
   if (identifier) catalog.identifiers.push(identifier);
   await store.put("kv", { key: "catalog.assets", value: catalog.assets });
+  await clearDraft(store, "equipo");
+  naWiz = null;
+  naUi = null;
   setStatus("✅ Activo enrolado localmente; se enviará al sincronizar.", "ok");
-  log("activo enrolado: " + asset.id + " — " + name);
+  log("activo enrolado: " + asset.id + " — " + asset.name);
   await selectAsset(asset);
 }
 
@@ -1086,7 +1173,7 @@ async function syncAll() {
 const screens = {};
 document.querySelectorAll("[data-screen]").forEach((el) => { screens[el.dataset.screen] = el; });
 
-async function onScreenShow(path) {
+async function onScreenShow(path, prev, param) {
   $("hdr-back").hidden = path === "/inicio";
   switch (path) {
     case "/activos":
@@ -1109,7 +1196,9 @@ async function onScreenShow(path) {
       startQr();
       break;
     case "/activos/nuevo":
-      renderNewAssetScreen();
+      await ensureNaWizard();
+      naWiz.goTo(param || NA_STEPS[0]);
+      naUi.render();
       break;
     case "/cola":
       await renderQueue();
@@ -1123,11 +1212,17 @@ function onScreenLeave(prev, next) {
   if (prev === "/activo/camara/confirmar") pendingPhoto = null;
   if (prev === "/activos/qr") stopQr();
   if (prev === "/activo/voz") cancelRecording();
+  // Al salir del alta de equipo se suelta el wizard; el borrador queda guardado.
+  if (prev.startsWith("/activos/nuevo") && !next.startsWith("/activos/nuevo")) {
+    naWiz = null;
+    naUi = null;
+  }
 }
 
 const router = createRouter({
   routes: screens,
   defaultPath: "/inicio",
+  paramRoutes: ["/activos/nuevo"],
   guards: {
     "/activo": () => (currentAsset ? null : "/activos"),
     "/activo/verificar": () => (currentAsset ? null : "/activos"),
@@ -1141,6 +1236,7 @@ const router = createRouter({
       if (!currentAsset) return "/activos";
       return $("consent").checked ? null : "/inicio";
     },
+    "/activos/nuevo": (param) => (param && NA_STEPS.includes(param) ? null : `/activos/nuevo/${NA_STEPS[0]}`),
   },
   onShow: onScreenShow,
   onLeave: onScreenLeave,
@@ -1177,9 +1273,6 @@ $("asset-list").addEventListener("click", async (e) => {
 $("scan-qr").addEventListener("click", () => router.navigate("/activos/qr"));
 $("qr-cancel").addEventListener("click", () => router.back());
 $("new-asset").addEventListener("click", () => router.navigate("/activos/nuevo"));
-$("na-type").addEventListener("change", renderNaAttrs);
-$("na-cancel").addEventListener("click", () => router.back());
-$("na-save").addEventListener("click", saveNewAsset);
 
 $("menu-verify").addEventListener("click", () => router.navigate("/activo/verificar"));
 $("menu-photos").addEventListener("click", () => {

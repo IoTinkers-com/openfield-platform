@@ -316,6 +316,18 @@ a { color: var(--of-primary); }
   padding: var(--of-space-3) var(--of-space-3) calc(env(safe-area-inset-bottom, 0px) + var(--of-space-3));
 }
 
+/* Wizard guiado (ADR-0025) */
+.of-wizard { display: flex; flex-direction: column; min-height: 100dvh; background: var(--of-surface); }
+.of-wizard-top { display: flex; align-items: center; gap: var(--of-space-2); padding: calc(env(safe-area-inset-top, 0px) + 0.5rem) 0.75rem 0.5rem; }
+.of-wizard-title { flex: 1; text-align: center; }
+.of-wizard-count { font-size: 0.85rem; color: var(--of-text-muted); }
+.of-wizard-body { flex: 1; padding: var(--of-space-3); overflow-y: auto; }
+.of-wizard-bar { position: sticky; bottom: 0; display: flex; gap: var(--of-space-2); padding: 0.75rem 0.75rem calc(env(safe-area-inset-bottom, 0px) + 0.75rem); background: var(--of-surface); border-top: 1px solid var(--of-border); }
+.of-wizard-bar .of-btn { flex: 1; min-height: 48px; }
+.of-card-option { display: block; width: 100%; min-height: 48px; text-align: left; margin-bottom: var(--of-space-2); padding: 0.75rem; border: 1px solid var(--of-border); border-radius: var(--of-radius-sm); background: var(--of-surface); color: var(--of-text); font: inherit; cursor: pointer; }
+.of-card-option.active { border-color: var(--of-primary); background: #eaf2ff; }
+.of-wizard-overlay { position: fixed; inset: 0; z-index: 80; background: var(--of-surface); overflow-y: auto; }
+
 /* Pestañas (panel de administración) */
 .of-tabs { display: flex; gap: var(--of-space-2); flex-wrap: wrap; margin-bottom: var(--of-space-4); border-bottom: 1px solid var(--of-border); }
 .of-tab {

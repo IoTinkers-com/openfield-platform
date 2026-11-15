@@ -10,6 +10,8 @@ import {
   attrVerificationBadge,
 } from "/static/js/labels.js";
 import { emptyState, escapeHtml, formatDate } from "/static/js/dossier-common.js";
+import { createWizard, toKey, saveDraft, loadDraft, clearDraft, createLocalKv } from "/static/js/wizard.js?v=e2";
+import { mountWizard } from "/static/js/wizard-ui.js?v=e2";
 
 const $ = (id) => document.getElementById(id);
 const PAGE_SIZE = 100;
@@ -225,20 +227,16 @@ function editType(id) {
   msg("types-msg", "");
 }
 
-$("new-type-btn").addEventListener("click", () => {
-  state.editingTypeId = null;
-  $("type-form-title").textContent = "Nuevo tipo de activo";
-  $("type-form").reset();
-  $("t-active").value = "1";
-  $("attr-rows").innerHTML = "";
-  fillCatRows([]);
-  msg("types-msg", "");
-});
+$("new-type-btn").addEventListener("click", () => startWizard("tipo"));
 
 $("add-attr-btn").addEventListener("click", () => $("attr-rows").appendChild(attrRow()));
 
 $("type-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!state.editingTypeId) {
+    msg("types-msg", "Usa «+ Nuevo tipo» para crear un tipo con el asistente.", "warn");
+    return;
+  }
   const payload = {
     name: $("t-name").value.trim(),
     equipment_class: $("t-class").value.trim() || null,
@@ -248,14 +246,8 @@ $("type-form").addEventListener("submit", async (e) => {
     photo_categories: readCatRows(),
   };
   try {
-    if (state.editingTypeId) {
-      await api(`/admin/asset-types/${encodeURIComponent(state.editingTypeId)}`, { method: "PUT", body: JSON.stringify(payload) });
-      msg("types-msg", "Tipo actualizado.", "ok");
-    } else {
-      const doc = await api("/admin/asset-types", { method: "POST", body: JSON.stringify(payload) });
-      state.editingTypeId = doc.id;
-      msg("types-msg", `Tipo creado: ${doc.id}`, "ok");
-    }
+    await api(`/admin/asset-types/${encodeURIComponent(state.editingTypeId)}`, { method: "PUT", body: JSON.stringify(payload) });
+    msg("types-msg", "Tipo actualizado.", "ok");
     await loadTypes();
   } catch (err) {
     msg("types-msg", err.message, "danger");
@@ -495,7 +487,7 @@ function fillAssetDialog(a) {
   renderAssetAttrInputs(state.typesById.get(a.asset_type_id), a.attributes || {});
 }
 
-$("new-asset-btn").addEventListener("click", () => openAssetDialog(null));
+$("new-asset-btn").addEventListener("click", () => startWizard("equipo"));
 $("asset-cancel").addEventListener("click", () => $("asset-dialog").close());
 $("status-cancel").addEventListener("click", () => $("status-dialog").close());
 
@@ -508,49 +500,31 @@ function numOrNull(id) {
 
 $("asset-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!state.editingAssetId) {
+    msg("asset-form-msg", "Usa «+ Enrolar activo» para crear un activo con el asistente.", "warn");
+    return;
+  }
   const attrs = readAssetAttrs();
   const lon = numOrNull("f-asset-lon");
   const lat = numOrNull("f-asset-lat");
   try {
-    if (!state.editingAssetId) {
-      const payload = {
-        name: $("f-asset-name").value.trim(),
-        asset_type_id: $("f-asset-type").value || null,
-        tag: $("f-asset-tag").value.trim() || null,
-        criticality: $("f-asset-crit").value || null,
-        functional_location: $("f-asset-loc").value.trim() || null,
-        manufacturer: $("f-asset-mfr").value.trim() || null,
-        model: $("f-asset-model").value.trim() || null,
-        serial_number: $("f-asset-serial").value.trim() || null,
-        status: $("f-asset-status").value,
-        attributes: attrs,
-        lon, lat,
-      };
-      if ($("f-asset-parent").value.trim()) {
-        payload.parent_id = await resolveParent($("f-asset-parent").value);
-        if (!payload.parent_id) throw new Error("padre no encontrado (usa un TAG o un id de activo)");
-      }
-      await api("/assets", { method: "POST", body: JSON.stringify(payload) });
-      msg("asset-form-msg", "Activo enrolado.", "ok");
-    } else {
-      const payload = {
-        name: $("f-asset-name").value.trim(),
-        asset_type_id: $("f-asset-type").value || null,
-        criticality: $("f-asset-crit").value || null,
-        functional_location: $("f-asset-loc").value.trim() || null,
-        manufacturer: $("f-asset-mfr").value.trim() || null,
-        model: $("f-asset-model").value.trim() || null,
-        serial_number: $("f-asset-serial").value.trim() || null,
-        attributes: attrs,
-      };
-      if (lon !== null || lat !== null) { payload.lon = lon; payload.lat = lat; }
-      if ($("f-asset-parent").value.trim()) {
-        payload.parent_id = await resolveParent($("f-asset-parent").value);
-        if (!payload.parent_id) throw new Error("padre no encontrado (usa un TAG o un id de activo)");
-      }
-      await api(`/assets/${encodeURIComponent(state.editingAssetId)}`, { method: "PATCH", body: JSON.stringify(payload) });
-      msg("asset-form-msg", "Activo actualizado.", "ok");
+    const payload = {
+      name: $("f-asset-name").value.trim(),
+      asset_type_id: $("f-asset-type").value || null,
+      criticality: $("f-asset-crit").value || null,
+      functional_location: $("f-asset-loc").value.trim() || null,
+      manufacturer: $("f-asset-mfr").value.trim() || null,
+      model: $("f-asset-model").value.trim() || null,
+      serial_number: $("f-asset-serial").value.trim() || null,
+      attributes: attrs,
+    };
+    if (lon !== null || lat !== null) { payload.lon = lon; payload.lat = lat; }
+    if ($("f-asset-parent").value.trim()) {
+      payload.parent_id = await resolveParent($("f-asset-parent").value);
+      if (!payload.parent_id) throw new Error("padre no encontrado (usa un TAG o un id de activo)");
     }
+    await api(`/assets/${encodeURIComponent(state.editingAssetId)}`, { method: "PATCH", body: JSON.stringify(payload) });
+    msg("asset-form-msg", "Activo actualizado.", "ok");
     $("asset-dialog").close();
     loadAssets();
   } catch (err) {
@@ -711,6 +685,448 @@ function renderStates() {
       .map(([k, v]) => `<tr><td><code>${k}</code></td><td>${attrVerificationBadge(k)} ${v}</td><td>${attrScopes[k]}</td></tr>`)
       .join("");
 }
+
+// ---------------------------------------------------------------------------
+// Wizards de alta (ADR-0025)
+// ---------------------------------------------------------------------------
+
+const localKv = createLocalKv();
+let wizardCtx = null;
+
+function currentTab() {
+  const tab = (location.hash.replace("#", "") || "assets").split("?")[0];
+  return ["assets", "types", "import", "states"].includes(tab) ? tab : "assets";
+}
+
+async function startWizard(kind) {
+  const draft = await loadDraft(localKv, kind);
+  if (draft && !confirm("Tienes un alta sin terminar. ¿Continuar donde la dejaste?")) {
+    await clearDraft(localKv, kind);
+    openWizard(kind, {});
+    return;
+  }
+  openWizard(kind, draft ? { data: draft.data, stepId: draft.stepId } : {});
+}
+
+function openWizard(kind, { data = {}, stepId = null } = {}) {
+  const def = WIZARDS[kind];
+  const wiz = createWizard({ steps: def.steps(), data: def.initData(data), stepId });
+  const root = $("wizard-root");
+  root.hidden = false;
+  const ui = mountWizard(root, wiz, {
+    title: def.title,
+    finishLabel: def.finishLabel,
+    renderStep: def.renderStep,
+    onFinish: (d) => def.onFinish(d, finishWizard),
+    onClose: () => closeWizard(),
+    onStepChange: (id, dir) => {
+      saveDraft(localKv, kind, wiz);
+      if (dir === "next") history.pushState({ wiz: kind, step: id }, "", `#wizard/${kind}/${id}`);
+      else history.back();
+    },
+  });
+  wizardCtx = { kind, wiz, ui };
+  history.pushState({ wiz: kind, step: wiz.current().id }, "", `#wizard/${kind}/${wiz.current().id}`);
+  ui.render();
+}
+
+function hideWizard() {
+  const root = $("wizard-root");
+  root.hidden = true;
+  root.innerHTML = "";
+  wizardCtx = null;
+}
+
+async function finishWizard() {
+  if (wizardCtx) await clearDraft(localKv, wizardCtx.kind);
+  hideWizard();
+  history.replaceState({}, "", `#${currentTab()}`);
+}
+
+function closeWizard() {
+  if (!wizardCtx) return;
+  if (!confirm("¿Descartar el alta en curso? Se perderá lo escrito.")) return;
+  clearDraft(localKv, wizardCtx.kind);
+  if (history.state && history.state.wiz) history.back();
+  else hideWizard();
+}
+
+window.addEventListener("popstate", (e) => {
+  const st = e.state;
+  if (!wizardCtx) {
+    if (st && st.wiz) history.replaceState({}, "", `#${currentTab()}`);
+    return;
+  }
+  if (st && st.wiz === wizardCtx.kind) {
+    wizardCtx.wiz.goTo(st.step);
+    wizardCtx.ui.render();
+  } else {
+    hideWizard();
+  }
+});
+
+const EQUIPMENT_CLASSES = [
+  "rotating/motor", "rotating/pump", "electrical/switchgear",
+  "electrical/transformer", "instrumentation/sensor",
+];
+
+function parseAttrValue(def, raw) {
+  if (raw === "" || raw == null) return null;
+  if (def.type === "boolean") return raw === "true";
+  if (def.type === "number") {
+    const n = Number(String(raw).replace(",", "."));
+    if (!Number.isFinite(n)) throw new Error(`"${def.label}" debe ser un número`);
+    return n;
+  }
+  return raw;
+}
+
+const TIPO_WIZARD = {
+  title: "Nuevo tipo de equipo",
+  finishLabel: "Crear tipo",
+  initData: (data) => ({
+    name: "",
+    equipment_class: "",
+    description: "",
+    attributes: [],
+    photo_categories: DEFAULT_PHOTO_CATEGORIES.map((c) => ({ ...c })),
+    pendingLabel: "",
+    ...data,
+  }),
+  steps: () => [
+    { id: "nombre", title: "¿Cómo se llama el tipo de equipo?", validate: (d) => (d.name && d.name.trim() ? null : "Escribe un nombre.") },
+    { id: "clase", title: "Clase de equipo (opcional)" },
+    { id: "descripcion", title: "Descripción (opcional)" },
+    {
+      id: "atributos",
+      title: "Atributos de la ficha técnica",
+      validate: (d) => {
+        if (d.pendingLabel && d.pendingLabel.trim()) return "Agrega el atributo o borra la etiqueta.";
+        const bad = (d.attributes || []).find((a) => a.type === "select" && !(a.options || []).length);
+        return bad ? `El atributo "${bad.label}" es de tipo lista y necesita opciones.` : null;
+      },
+    },
+    { id: "categorias", title: "Categorías de foto" },
+    { id: "revision", title: "Revisa y crea", finishLabel: "Crear tipo" },
+  ],
+  renderStep(step, data, body, wiz, rerender) {
+    if (step.id === "nombre") {
+      body.innerHTML = `<div class="of-field"><label for="w-name">Nombre</label>
+        <input id="w-name" maxlength="200" value="${escapeHtml(data.name || "")}" placeholder="p. ej. Motor eléctrico"></div>`;
+      const el = body.querySelector("#w-name");
+      el.addEventListener("input", () => wiz.set({ name: el.value }));
+      el.focus();
+      return;
+    }
+    if (step.id === "clase") {
+      body.innerHTML = `<p class="of-status">Sugerencias de nomenclatura tipo ISO 14224 (puedes escribir otra).</p>
+        ${EQUIPMENT_CLASSES.map((c) => `<button type="button" class="of-card-option${data.equipment_class === c ? " active" : ""}" data-c="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join("")}
+        <div class="of-field"><label for="w-class">Otra clase</label>
+          <input id="w-class" maxlength="100" value="${escapeHtml(data.equipment_class || "")}"></div>`;
+      body.querySelectorAll("[data-c]").forEach((b) =>
+        b.addEventListener("click", () => { wiz.set({ equipment_class: b.dataset.c }); rerender(); }));
+      const el = body.querySelector("#w-class");
+      el.addEventListener("input", () => wiz.set({ equipment_class: el.value }));
+      return;
+    }
+    if (step.id === "descripcion") {
+      body.innerHTML = `<div class="of-field"><label for="w-desc">Descripción</label>
+        <textarea id="w-desc" rows="4" maxlength="2000">${escapeHtml(data.description || "")}</textarea></div>`;
+      const el = body.querySelector("#w-desc");
+      el.addEventListener("input", () => wiz.set({ description: el.value }));
+      return;
+    }
+    if (step.id === "atributos") {
+      const attrs = data.attributes || [];
+      body.innerHTML = `
+        <div>${attrs.map((a, i) => `<div class="of-field" style="display:flex; justify-content:space-between; align-items:center; gap:.5rem">
+            <span><strong>${escapeHtml(a.label)}</strong> <code>${escapeHtml(a.key)}</code> · ${escapeHtml(a.type)}${a.unit ? ` (${escapeHtml(a.unit)})` : ""}${a.required ? " · obligatorio" : ""}</span>
+            <button type="button" class="of-btn" data-del="${i}" title="Quitar">✕</button></div>`).join("") || '<p class="of-status">Aún no hay atributos. Puedes crear el tipo sin atributos.</p>'}</div>
+        <div class="of-card" style="padding:var(--of-space-3); margin-top:var(--of-space-3)">
+          <div class="of-field"><label for="w-a-label">Etiqueta</label><input id="w-a-label" maxlength="100" value="${escapeHtml(data.pendingLabel || "")}" placeholder="p. ej. Potencia nominal"></div>
+          <div class="of-field"><label for="w-a-type">Tipo</label><select id="w-a-type">${ATTR_TYPES.map((t) => `<option>${t}</option>`).join("")}</select></div>
+          <div class="of-field" data-when="number"><label for="w-a-unit">Unidad</label><input id="w-a-unit" maxlength="20" placeholder="kW"></div>
+          <div class="of-field" data-when="select" hidden><label for="w-a-options">Opciones (separadas por coma)</label><input id="w-a-options" maxlength="2000"></div>
+          <label class="of-attr-flag"><input id="w-a-req" type="checkbox"> Obligatorio</label>
+          <label class="of-attr-flag"><input id="w-a-ver" type="checkbox" checked> Verificar en terreno</label>
+          <div class="of-actions"><button type="button" class="of-btn" id="w-a-add">+ Agregar atributo</button></div>
+        </div>`;
+      body.querySelectorAll("[data-del]").forEach((b) =>
+        b.addEventListener("click", () => {
+          const list = [...attrs];
+          list.splice(Number(b.dataset.del), 1);
+          wiz.set({ attributes: list });
+          rerender();
+        }));
+      const label = body.querySelector("#w-a-label");
+      const type = body.querySelector("#w-a-type");
+      const unit = body.querySelector("#w-a-unit");
+      const options = body.querySelector("#w-a-options");
+      const sync = () => {
+        body.querySelector('[data-when="number"]').hidden = type.value !== "number";
+        body.querySelector('[data-when="select"]').hidden = type.value !== "select";
+      };
+      type.addEventListener("change", sync);
+      label.addEventListener("input", () => wiz.set({ pendingLabel: label.value }));
+      sync();
+      body.querySelector("#w-a-add").addEventListener("click", () => {
+        const text = label.value.trim();
+        if (!text) { label.focus(); return; }
+        const opts = options.value.split(",").map((s) => s.trim()).filter(Boolean);
+        const attr = {
+          key: toKey(text, attrs.map((a) => a.key)),
+          label: text.slice(0, 100),
+          type: type.value,
+          unit: type.value === "number" ? (unit.value.trim() || null) : null,
+          required: body.querySelector("#w-a-req").checked,
+          options: type.value === "select" ? opts : null,
+          active: true,
+          order: attrs.length,
+          verify_in_field: body.querySelector("#w-a-ver").checked,
+        };
+        wiz.set({ attributes: [...attrs, attr], pendingLabel: "" });
+        rerender();
+      });
+      return;
+    }
+    if (step.id === "categorias") {
+      const cats = data.photo_categories || [];
+      body.innerHTML = `
+        <p class="of-status">Etiquetas de un toque al confirmar cada foto. Si no dejas ninguna, la captura usa las predeterminadas.</p>
+        <div>${cats.map((c, i) => `<label class="of-attr-flag" style="display:block; margin-bottom:.4rem">
+            <input type="checkbox" data-cat="${i}" ${c.active !== false ? "checked" : ""}> ${escapeHtml(c.label)} <code>${escapeHtml(c.key)}</code></label>`).join("") || '<p class="of-status">Sin categorías configuradas.</p>'}</div>
+        <div class="of-field"><label for="w-newcat">Otra categoría</label>
+          <input id="w-newcat" maxlength="100" placeholder="p. ej. Rodamientos"></div>
+        <div class="of-actions"><button type="button" class="of-btn" id="w-addcat">+ Agregar categoría</button></div>`;
+      body.querySelectorAll("[data-cat]").forEach((el) =>
+        el.addEventListener("change", () => {
+          const list = cats.map((c, i) => (i === Number(el.dataset.cat) ? { ...c, active: el.checked } : c));
+          wiz.set({ photo_categories: list });
+        }));
+      body.querySelector("#w-addcat").addEventListener("click", () => {
+        const input = body.querySelector("#w-newcat");
+        const text = input.value.trim();
+        if (!text) { input.focus(); return; }
+        const list = [...cats, { key: toKey(text, cats.map((c) => c.key)), label: text.slice(0, 100), active: true }];
+        wiz.set({ photo_categories: list });
+        rerender();
+      });
+      return;
+    }
+    if (step.id === "revision") {
+      const attrs = data.attributes || [];
+      const cats = (data.photo_categories || []).filter((c) => c.active !== false);
+      body.innerHTML = `<div class="of-card">
+        <p><strong>Nombre:</strong> ${escapeHtml(data.name)}</p>
+        <p><strong>Clase:</strong> ${escapeHtml(data.equipment_class || "—")}</p>
+        <p><strong>Descripción:</strong> ${escapeHtml(data.description || "—")}</p>
+        <p><strong>Atributos (${attrs.length}):</strong> ${attrs.map((a) => escapeHtml(a.label)).join(", ") || "—"}</p>
+        <p><strong>Categorías de foto:</strong> ${cats.map((c) => escapeHtml(c.label)).join(", ") || "predeterminadas"}</p>
+      </div>`;
+    }
+  },
+  async onFinish(data, done) {
+    const payload = {
+      name: data.name.trim(),
+      equipment_class: data.equipment_class && data.equipment_class.trim() ? data.equipment_class.trim() : null,
+      description: data.description && data.description.trim() ? data.description.trim() : null,
+      active: true,
+      attributes: (data.attributes || []).map((a, i) => ({ ...a, order: i })),
+      photo_categories: (data.photo_categories || []).filter((c) => c.active !== false),
+    };
+    const doc = await api("/admin/asset-types", { method: "POST", body: JSON.stringify(payload) });
+    await loadTypes();
+    await done();
+    editType(doc.id);
+    msg("types-msg", `Tipo creado: ${doc.name}`, "ok");
+  },
+};
+
+const EQUIPO_WIZARD = {
+  title: "Enrolar activo",
+  finishLabel: "Enrolar",
+  initData: (data) => ({
+    typeId: null,
+    name: "",
+    tag: "",
+    functional_location: "",
+    parent: "",
+    lat: "",
+    lon: "",
+    attrs: {},
+    manufacturer: "",
+    model: "",
+    serial_number: "",
+    criticality: "",
+    status: "in_service",
+    ...data,
+  }),
+  steps: () => [
+    { id: "tipo", title: "¿Qué tipo de equipo es?", validate: (d) => (d.typeId === null ? "Elige un tipo (o «Sin tipo»)." : null) },
+    { id: "ident", title: "Identificación", validate: (d) => (d.name && d.name.trim() ? null : "Escribe un nombre.") },
+    {
+      id: "ubicacion",
+      title: "Ubicación",
+      validate: (d) => {
+        const lat = String(d.lat || "").trim();
+        const lon = String(d.lon || "").trim();
+        return lat === lon || (lat && lon) ? null : "Latitud y longitud van juntas.";
+      },
+    },
+    {
+      id: "ficha",
+      title: "Ficha técnica",
+      skipIf: (d) => !d.typeId,
+      validate: (d) => {
+        const type = state.typesById.get(d.typeId);
+        const missing = (type?.attributes || [])
+          .filter((a) => a.active !== false && a.required)
+          .filter((a) => {
+            const v = (d.attrs || {})[a.key];
+            return v === undefined || v === null || String(v).trim() === "";
+          })
+          .map((a) => a.label || a.key);
+        return missing.length ? `Completa los obligatorios: ${missing.join(", ")}` : null;
+      },
+    },
+    { id: "detalle", title: "Detalle" },
+    { id: "estado", title: "Estado inicial" },
+    { id: "revision", title: "Revisa y enrola", finishLabel: "Enrolar" },
+  ],
+  renderStep(step, data, body, wiz, rerender) {
+    if (step.id === "tipo") {
+      const types = state.types.filter((t) => t.active !== false);
+      body.innerHTML = types.map((t) => `<button type="button" class="of-card-option${data.typeId === t.id ? " active" : ""}" data-t="${escapeHtml(t.id)}">${escapeHtml(t.name)}</button>`).join("")
+        + `<button type="button" class="of-card-option${data.typeId === "" ? " active" : ""}" data-t="">Sin tipo</button>`;
+      body.querySelectorAll("[data-t]").forEach((b) =>
+        b.addEventListener("click", () => { wiz.set({ typeId: b.dataset.t }); rerender(); }));
+      return;
+    }
+    if (step.id === "ident") {
+      body.innerHTML = `<div class="of-field"><label for="w-aname">Nombre *</label>
+          <input id="w-aname" maxlength="200" value="${escapeHtml(data.name || "")}"></div>
+        <div class="of-field"><label for="w-atag">TAG</label>
+          <input id="w-atag" maxlength="100" value="${escapeHtml(data.tag || "")}"></div>`;
+      const name = body.querySelector("#w-aname");
+      const tag = body.querySelector("#w-atag");
+      name.addEventListener("input", () => wiz.set({ name: name.value }));
+      tag.addEventListener("input", () => wiz.set({ tag: tag.value }));
+      name.focus();
+      return;
+    }
+    if (step.id === "ubicacion") {
+      body.innerHTML = `<div class="of-field"><label for="w-aloc">Ubicación funcional</label>
+          <input id="w-aloc" maxlength="200" value="${escapeHtml(data.functional_location || "")}"></div>
+        <div class="of-field"><label for="w-aparent">Padre (TAG o id)</label>
+          <input id="w-aparent" maxlength="100" value="${escapeHtml(data.parent || "")}"></div>
+        <div class="of-field"><label for="w-alat">Latitud</label>
+          <input id="w-alat" inputmode="decimal" maxlength="20" value="${escapeHtml(String(data.lat ?? ""))}"></div>
+        <div class="of-field"><label for="w-alon">Longitud</label>
+          <input id="w-alon" inputmode="decimal" maxlength="20" value="${escapeHtml(String(data.lon ?? ""))}"></div>`;
+      const bind = (id, field) => {
+        const el = body.querySelector(id);
+        el.addEventListener("input", () => wiz.set({ [field]: el.value }));
+      };
+      bind("#w-aloc", "functional_location");
+      bind("#w-aparent", "parent");
+      bind("#w-alat", "lat");
+      bind("#w-alon", "lon");
+      return;
+    }
+    if (step.id === "ficha") {
+      const type = state.typesById.get(data.typeId);
+      const attrs = (type?.attributes || []).filter((a) => a.active !== false).sort((a, b) => (a.order || 0) - (b.order || 0));
+      body.innerHTML = attrs.map((a) => `<div class="of-field">
+          <label>${escapeHtml(a.label)}${a.unit ? ` (${escapeHtml(a.unit)})` : ""}${a.required ? " *" : ""}</label>
+          ${attrInput(a, (data.attrs || {})[a.key])}</div>`).join("")
+        || '<p class="of-status">Este tipo no define atributos.</p>';
+      body.querySelectorAll("[data-attr]").forEach((el) =>
+        el.addEventListener("input", () => wiz.set({ attrs: { ...(data.attrs || {}), [el.dataset.attr]: el.value } })));
+      body.querySelectorAll("select[data-attr]").forEach((el) =>
+        el.addEventListener("change", () => wiz.set({ attrs: { ...(data.attrs || {}), [el.dataset.attr]: el.value } })));
+      return;
+    }
+    if (step.id === "detalle") {
+      body.innerHTML = `<div class="of-field"><label for="w-amfr">Fabricante</label><input id="w-amfr" maxlength="200" value="${escapeHtml(data.manufacturer || "")}"></div>
+        <div class="of-field"><label for="w-amodel">Modelo</label><input id="w-amodel" maxlength="200" value="${escapeHtml(data.model || "")}"></div>
+        <div class="of-field"><label for="w-aserial">N.º de serie</label><input id="w-aserial" maxlength="200" value="${escapeHtml(data.serial_number || "")}"></div>
+        <div class="of-field"><label for="w-acrit">Criticidad</label>
+          <select id="w-acrit"><option value="">—</option><option${data.criticality === "A" ? " selected" : ""}>A</option><option${data.criticality === "B" ? " selected" : ""}>B</option><option${data.criticality === "C" ? " selected" : ""}>C</option></select></div>`;
+      const bind = (id, field) => {
+        const el = body.querySelector(id);
+        el.addEventListener("input", () => wiz.set({ [field]: el.value }));
+        el.addEventListener("change", () => wiz.set({ [field]: el.value }));
+      };
+      bind("#w-amfr", "manufacturer");
+      bind("#w-amodel", "model");
+      bind("#w-aserial", "serial_number");
+      bind("#w-acrit", "criticality");
+      return;
+    }
+    if (step.id === "estado") {
+      const opts = [["in_service", "En servicio"], ["planned", "Planificado"], ["standby", "En reserva"]];
+      body.innerHTML = opts.map(([k, label]) =>
+        `<button type="button" class="of-card-option${data.status === k ? " active" : ""}" data-s="${k}">${label}</button>`).join("");
+      body.querySelectorAll("[data-s]").forEach((b) =>
+        b.addEventListener("click", () => { wiz.set({ status: b.dataset.s }); rerender(); }));
+      return;
+    }
+    if (step.id === "revision") {
+      const type = state.typesById.get(data.typeId);
+      const defs = (type?.attributes || []).filter((a) => a.active !== false);
+      const filled = defs.filter((a) => {
+        const v = (data.attrs || {})[a.key];
+        return v !== undefined && v !== null && String(v).trim() !== "";
+      }).map((a) => `${escapeHtml(a.label)}: ${escapeHtml(String(data.attrs[a.key]))}`);
+      body.innerHTML = `<div class="of-card">
+        <p><strong>Nombre:</strong> ${escapeHtml(data.name)}</p>
+        <p><strong>Tipo:</strong> ${escapeHtml(type?.name || "sin tipo")}</p>
+        <p><strong>TAG:</strong> ${escapeHtml(data.tag || "—")}</p>
+        <p><strong>Ubicación:</strong> ${escapeHtml(data.functional_location || "—")}</p>
+        <p><strong>Ficha:</strong> ${filled.join(" · ") || "—"}</p>
+        <p><strong>Detalle:</strong> ${escapeHtml([data.manufacturer, data.model, data.serial_number].filter(Boolean).join(" ") || "—")}</p>
+        <p><strong>Estado:</strong> ${escapeHtml(STATUS_LABELS[data.status] || data.status)}</p>
+      </div>`;
+    }
+  },
+  async onFinish(data, done) {
+    const type = state.typesById.get(data.typeId);
+    const defs = new Map((type?.attributes || []).map((a) => [a.key, a]));
+    const attrs = {};
+    for (const [key, raw] of Object.entries(data.attrs || {})) {
+      const def = defs.get(key);
+      if (!def) continue;
+      const v = parseAttrValue(def, raw);
+      if (v !== null) attrs[key] = v;
+    }
+    const lat = String(data.lat || "").trim();
+    const lon = String(data.lon || "").trim();
+    const payload = {
+      name: data.name.trim(),
+      asset_type_id: data.typeId || null,
+      tag: data.tag && data.tag.trim() ? data.tag.trim() : null,
+      criticality: data.criticality || null,
+      functional_location: data.functional_location && data.functional_location.trim() ? data.functional_location.trim() : null,
+      manufacturer: data.manufacturer && data.manufacturer.trim() ? data.manufacturer.trim() : null,
+      model: data.model && data.model.trim() ? data.model.trim() : null,
+      serial_number: data.serial_number && data.serial_number.trim() ? data.serial_number.trim() : null,
+      status: data.status || "in_service",
+      attributes: attrs,
+      lon: lon ? Number(lon.replace(",", ".")) : null,
+      lat: lat ? Number(lat.replace(",", ".")) : null,
+    };
+    if (data.parent && data.parent.trim()) {
+      payload.parent_id = await resolveParent(data.parent);
+      if (!payload.parent_id) throw new Error("padre no encontrado (usa un TAG o un id de activo)");
+    }
+    await api("/assets", { method: "POST", body: JSON.stringify(payload) });
+    await loadAssets();
+    await done();
+    msg("assets-msg", "Activo enrolado.", "ok");
+  },
+};
+
+const WIZARDS = { tipo: TIPO_WIZARD, equipo: EQUIPO_WIZARD };
 
 // ---------------------------------------------------------------------------
 // Inicio

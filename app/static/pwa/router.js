@@ -1,16 +1,28 @@
-// Enrutado por hash: una pantalla por paso (ADR-0024). El gesto/botón Atrás del
-// sistema navega por el history API; cuando no hay historial dentro de la app,
-// Atrás lleva a la pantalla padre de la ruta.
-//
-// routes: {"/inicio": HTMLElement, ...} — cada pantalla se muestra con `hidden`.
-// guards: {"/ruta": () => "/redireccion" | null} — se evalúan en cada cambio.
+// Enrutado por hash: una pantalla por paso (ADR-0024/0025). Atrás del sistema navega por
+// el history API; sin historial interno va a la pantalla padre.
+// routes: {"/inicio": HTMLElement}; paramRoutes: ["/equipos/nuevo"] admite "/equipos/nuevo/<paso>".
+// aliases: {"/activo": "/visita"} (rutas antiguas). guards: {"/ruta": (param) => "/otra" | null}.
 // Copia idéntica en openfield-platform/app/static/pwa/router.js (ADR-0018).
 
-export function normalizePath(hash, routes, fallback = "/inicio") {
-  let p = (hash || "").replace(/^#/, "") || fallback;
+export function matchRoute(hash, routes, paramRoutes = [], aliases = {}) {
+  let p = (hash || "").replace(/^#/, "");
   if (!p.startsWith("/")) p = `/${p}`;
   p = p.replace(/\/+$/, "") || "/";
-  return routes[p] ? p : fallback;
+  if (aliases[p]) p = aliases[p];
+  if (routes[p]) return { path: p, base: p, param: null };
+  const bases = [...paramRoutes].sort((a, b) => b.length - a.length);
+  for (const base of bases) {
+    if (routes[base] && p.startsWith(`${base}/`)) {
+      const param = p.slice(base.length + 1);
+      if (param && !param.includes("/")) return { path: p, base, param };
+    }
+  }
+  return null;
+}
+
+export function normalizePath(hash, routes, fallback = "/inicio", paramRoutes = [], aliases = {}) {
+  const m = matchRoute(hash, routes, paramRoutes, aliases);
+  return m ? m.path : fallback;
 }
 
 export function parentOf(path, fallback = "/inicio") {
@@ -22,38 +34,47 @@ export function createRouter({
   routes,
   defaultPath = "/inicio",
   guards = {},
+  paramRoutes = [],
+  aliases = {},
   onShow = () => {},
   onLeave = () => {},
   win = window,
 } = {}) {
   let current = null;
+  let currentBase = null;
+  let currentParam = null;
   let depth = 0; // entradas de historial creadas dentro de la app
   let expectPush = false;
+
+  const match = (p) => matchRoute(p, routes, paramRoutes, aliases);
 
   function resolve(path) {
     let p = path;
     for (let i = 0; i < 5; i++) {
-      const redirect = guards[p] ? guards[p]() : null;
+      const m = match(p);
+      const g = m && guards[m.base];
+      const redirect = g ? g(m.param) : null;
       if (!redirect || redirect === p) break;
       p = redirect;
     }
-    return routes[p] ? p : defaultPath;
+    return match(p) ? match(p).path : defaultPath;
   }
 
   function show(path) {
     const prev = current;
     if (prev === path) return;
+    const m = match(path);
     if (prev) onLeave(prev, path);
     current = path;
-    for (const [p, el] of Object.entries(routes)) {
-      el.hidden = p !== path;
-    }
-    onShow(path, prev);
+    currentBase = m.base;
+    currentParam = m.param;
+    for (const [p, el] of Object.entries(routes)) el.hidden = p !== m.base;
+    onShow(path, prev, m.param);
   }
 
   // Procesa el hash actual: resuelve guardas y muestra la pantalla.
   function sync() {
-    const p = resolve(normalizePath(win.location.hash, routes, defaultPath));
+    const p = resolve(normalizePath(win.location.hash, routes, defaultPath, paramRoutes, aliases));
     const want = `#${p}`;
     if (win.location.hash !== want) {
       // Guarda redirigió (o hash desconocido): reemplaza la entrada para que
@@ -104,6 +125,15 @@ export function createRouter({
     sync,
     get current() {
       return current;
+    },
+    get base() {
+      return currentBase;
+    },
+    get param() {
+      return currentParam;
+    },
+    get depth() {
+      return depth;
     },
   };
 }
