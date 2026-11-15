@@ -30,7 +30,9 @@
     <p id="consent-state-home" class="of-status"></p>
     <button id="home-visit" class="of-card-option primary" hidden></button>
     <div class="of-actions" style="flex-direction:column; align-items:stretch">
-      <button id="go-assets" class="of-btn primary">Inspeccionar equipo</button>
+      <button id="home-capture" class="of-btn primary">Capturar</button>
+      <button id="home-tray" class="of-btn" hidden>Bandeja sin asignar</button>
+      <button id="go-assets" class="of-btn">Inspeccionar equipo</button>
       <button id="go-queue" class="of-btn">Por sincronizar</button>
       <button id="go-settings" class="of-btn">Ajustes</button>
     </div>
@@ -69,6 +71,28 @@
     </div>
     <p class="of-status">Para dictar comentarios usa el micrófono del teclado del teléfono.
     En Android, descarga el idioma en Gboard para dictar sin conexión.</p>
+  </section>
+
+  <!-- Capturar: elegir el medio (ADR-0027) -->
+  <section data-screen="/capturar" class="of-card" hidden>
+    <h2 class="of-section-title">¿Qué quieres capturar?</h2>
+    <p id="capture-context" class="of-status"></p>
+    <button id="cap-photo" class="of-card-option">📷 Foto</button>
+    <button id="cap-voice" class="of-card-option">🎙️ Nota de voz</button>
+    <button id="cap-text" class="of-card-option">💬 Texto</button>
+  </section>
+
+  <!-- Bandeja de capturas sin asignar (ADR-0027) -->
+  <section data-screen="/bandeja" class="of-card" hidden>
+    <h2 class="of-section-title">Bandeja sin asignar</h2>
+    <p id="tray-info" class="of-status"></p>
+    <ul id="tray-list" class="of-list"></ul>
+    <button id="tray-assign" class="of-btn primary">Asignar a un equipo</button>
+  </section>
+
+  <!-- Wizard de asignación (ADR-0027) -->
+  <section data-screen="/asignar" class="of-card" hidden>
+    <div id="asignar-root"></div>
   </section>
 
   <!-- Selector de activo -->
@@ -223,10 +247,11 @@
 
   <!-- Cola de sincronización -->
   <section data-screen="/sincronizar" class="of-card" hidden>
-    <h2 class="of-section-title">Cola de sincronización</h2>
-    <ul id="queue-list" class="of-list"></ul>
+    <h2 class="of-section-title">Sincronizar</h2>
+    <p id="sync-summary" class="of-status"></p>
+    <div id="sync-cards"></div>
     <div class="of-actions" style="justify-content: space-between;">
-      <button id="sync" class="of-btn primary">⤒ Sincronizar</button>
+      <button id="sync-all" class="of-btn primary">⤒ Sincronizar visitas</button>
     </div>
     <h3 class="of-section-title" style="margin-top:var(--of-space-4)">Registro</h3>
     <div id="log" class="of-log"></div>
@@ -308,6 +333,8 @@ let consent = null;         // consent-record vigente (ADR-0026)
 let consentReturn = null;   // ruta pedida antes de pasar por el aviso
 let visits = [];            // registro local de visitas (ADR-0027)
 let lastClosed = null;      // última visita cerrada (para /visita/cerrada)
+let qrReturn = null;        // "asignar" cuando el QR se escanea para asignar borradores
+let afterCreate = null;     // "asignar" cuando el alta de equipo viene del wizard de asignación
 const deviceId = localStorage.getItem("of.deviceId") || newId("dev");
 localStorage.setItem("of.deviceId", deviceId);
 
@@ -397,14 +424,26 @@ function updateConnectionBadge() {
 window.addEventListener("online", () => { updateConnectionBadge(); renderQueue(); });
 window.addEventListener("offline", updateConnectionBadge);
 
+const KIND_LABELS = {
+  doc: "Documento", media: "Foto/medio", audio: "Nota de voz",
+  verify: "Verificación", "session-end": "Cierre de sesión",
+};
+const DOC_LABELS = {
+  device: "Dispositivo", session: "Sesión", transcript: "Transcripción",
+  observation: "Comentario", asset: "Activo nuevo", "asset-identifier": "Identificador",
+  "media-item": "Medio",
+};
+
+function kindLabel(it) {
+  return it.kind === "doc" ? (DOC_LABELS[it.entity] || it.entity) : (KIND_LABELS[it.kind] || it.kind);
+}
+
+// Cola: badge de la cabecera + pantalla de sincronización por visita (ADR-0027).
 async function renderQueue() {
   const items = await queue.list();
   const badge = $("queue-badge");
   const closed = closedVisits(visits).length;
   const drafts = summarize(items).drafts.total;
-  $("sync").textContent = items.filter((i) => !i.draft).length
-    ? `⤒ Sincronizar (${items.filter((i) => !i.draft).length})`
-    : "⤒ Sincronizar";
   if (closed) {
     badge.textContent = `${closed} visita${closed === 1 ? "" : "s"} por sincronizar`;
     badge.className = "of-badge warn";
@@ -415,27 +454,105 @@ async function renderQueue() {
     badge.textContent = "Sin pendientes";
     badge.className = "of-badge ok";
   }
-  const KIND_LABELS = {
-    doc: "Documento", media: "Foto/medio", audio: "Nota de voz",
-    verify: "Verificación", "session-end": "Cierre de sesión",
-  };
-  const DOC_LABELS = {
-    device: "Dispositivo", session: "Sesión", transcript: "Transcripción",
-    observation: "Comentario", asset: "Activo nuevo", "asset-identifier": "Identificador",
-    "media-item": "Medio",
-  };
-  const ul = $("queue-list");
-  ul.innerHTML = "";
-  for (const it of items) {
-    const li = document.createElement("li");
-    const when = (it.created_at || "").slice(11, 19);
-    const label = it.kind === "doc" ? (DOC_LABELS[it.entity] || it.entity) : (KIND_LABELS[it.kind] || it.kind);
-    const err = it.last_error ? ` — <span class="of-badge danger">${it.last_error}</span>` : "";
-    const tries = it.attempts ? ` (intento ${it.attempts})` : "";
-    li.innerHTML = `<span>${label} · ${when}${tries}${err} </span>`;
-    for (const b of queueItemActions(it)) li.appendChild(b);
-    ul.appendChild(li);
+  await renderSync();
+}
+
+let syncResults = {}; // sessionId -> { synced, failed, last_error }
+let syncAfterClose = false;
+
+async function renderSync() {
+  const items = await queue.list();
+  const s = summarize(items);
+  const closed = closedVisits(visits);
+  const open = currentVisit(visits);
+  const totals = sumCounts(closed.map((v) => s.sessions[v.id] || {}));
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  let summary = closed.length
+    ? `Tienes ${plural(closed.length, "visita cerrada", "visitas cerradas")} (${plural(closed.length, "equipo", "equipos")}) con ${describeCounts(totals)} por sincronizar.`
+    : "No hay visitas cerradas por sincronizar.";
+  if (s.drafts.total) {
+    summary += ` Hay ${s.drafts.total} captura(s) sin asignar que no se sincronizarán (Bandeja).`;
   }
+  $("sync-summary").textContent = summary;
+  const btn = $("sync-all");
+  btn.textContent = closed.length ? `⤒ Sincronizar ${plural(closed.length, "visita", "visitas")}` : "⤒ Sincronizar";
+  btn.disabled = !closed.length || syncing;
+
+  const box = $("sync-cards");
+  box.innerHTML = "";
+  const groups = new Map();
+  for (const v of [...closed, ...(open ? [open] : [])]) {
+    const key = ((v.state === "closed" ? v.ended_at : v.started_at) || "").slice(0, 10) || "sin fecha";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(v);
+  }
+  if (!groups.size) {
+    box.innerHTML = '<p class="of-status">Sin visitas que mostrar.</p>';
+    return;
+  }
+  for (const [day, list] of groups) {
+    const h = document.createElement("h3");
+    h.className = "of-section-title";
+    h.textContent = `Jornada ${day}`;
+    box.appendChild(h);
+    for (const v of list) box.appendChild(visitCard(v, items, s.sessions[v.id] || {}));
+  }
+}
+
+function visitCard(v, items, counts) {
+  const card = document.createElement("div");
+  card.className = "of-card";
+  card.style.marginBottom = "var(--of-space-2)";
+  const res = syncResults[v.id];
+  const stateBadge = v.state === "open"
+    ? '<span class="of-badge warn">en curso</span>'
+    : res && res.failed === 0 && res.synced > 0
+      ? '<span class="of-badge ok">✓ enviada</span>'
+      : res && res.failed
+        ? `<span class="of-badge danger">⚠ ${res.failed} fallidos</span>`
+        : '<span class="of-badge">pendiente</span>';
+  card.innerHTML = `<div class="of-actions" style="margin:0; justify-content:space-between">
+      <strong>${escapeHtml(v.asset_name)}</strong> ${stateBadge}</div>
+    <div class="of-popup-id">${escapeHtml((v.started_at || "").slice(11, 16))}–${escapeHtml((v.ended_at || "").slice(11, 16) || "…")} · ${escapeHtml(describeCounts(counts))}</div>
+    ${res && res.last_error ? `<div class="of-popup-id">${escapeHtml(res.last_error)}</div>` : ""}`;
+
+  const own = items.filter((i) => !i.draft && sessionOf(i) === v.id);
+  if (own.length) {
+    const det = document.createElement("details");
+    const sum = document.createElement("summary");
+    sum.textContent = `Ver detalle (${own.length})`;
+    det.appendChild(sum);
+    const ul = document.createElement("ul");
+    ul.className = "of-list";
+    for (const it of own) {
+      const li = document.createElement("li");
+      const err = it.last_error ? ` — <span class="of-badge danger">${escapeHtml(it.last_error)}</span>` : "";
+      const tries = it.attempts ? ` (intento ${it.attempts})` : "";
+      li.innerHTML = `<span>${escapeHtml(kindLabel(it))} · ${(it.created_at || "").slice(11, 19)}${tries}${err} </span>`;
+      for (const b of queueItemActions(it)) li.appendChild(b);
+      ul.appendChild(li);
+    }
+    det.appendChild(ul);
+    card.appendChild(det);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "of-actions";
+  const b = document.createElement("button");
+  b.className = v.state === "open" ? "of-btn primary" : "of-btn";
+  b.textContent = v.state === "open" ? "Cerrar y sincronizar" : "Sincronizar solo esta";
+  b.disabled = syncing;
+  b.addEventListener("click", () => {
+    if (v.state === "open") {
+      syncAfterClose = true;
+      router.navigate("/visita/cerrar");
+    } else {
+      syncVisits([v.id]);
+    }
+  });
+  actions.appendChild(b);
+  card.appendChild(actions);
+  return card;
 }
 
 // --- Catálogo / selector de activo ---
@@ -612,7 +729,17 @@ const NO_BANNER = ["/camara", "/camara/confirmar", "/inspeccionar/qr", "/visita"
 async function renderBanner(path = router.current) {
   const el = $("visit-banner");
   const v = currentVisit(visits);
-  if (!v || NO_BANNER.includes(path)) {
+  if (!v) {
+    const drafts = (await draftItems()).length;
+    if (!drafts || NO_BANNER.includes(path)) {
+      el.hidden = true;
+      return;
+    }
+    el.textContent = `● ${drafts} captura(s) sin asignar · tocá para asignar`;
+    el.hidden = false;
+    return;
+  }
+  if (NO_BANNER.includes(path)) {
     el.hidden = true;
     return;
   }
@@ -633,6 +760,10 @@ async function renderHome() {
   $("go-queue").textContent = closed
     ? `Por sincronizar (${closed} visita${closed === 1 ? "" : "s"})`
     : "Por sincronizar";
+  const drafts = (await draftItems()).length;
+  const tray = $("home-tray");
+  tray.hidden = !drafts;
+  tray.textContent = `Bandeja sin asignar (${drafts})`;
   renderConsentState();
 }
 
@@ -678,6 +809,203 @@ async function renderClosedScreen() {
   const c = summarize(items).sessions[lastClosed.id] || { media: 0, audio: 0, notes: 0, verify: 0, total: 0 };
   $("closed-summary").textContent =
     `${lastClosed.asset_name} · ${describeCounts(c)} · cerrada ${(lastClosed.ended_at || "").slice(11, 16)}`;
+}
+
+// --- Captura primero: contexto y bandeja de borradores (ADR-0027) ---
+
+function captureCtx() {
+  const v = currentVisit(visits);
+  return v ? { visit: v, sessionId: v.id, assetId: v.asset_id } : null;
+}
+
+async function renderCapture() {
+  const ctx = captureCtx();
+  $("capture-context").textContent = ctx
+    ? `Se guardará en la visita de ${ctx.visit.asset_name}.`
+    : "Se guardará sin asignar; podrás asignarla a un equipo después.";
+}
+
+async function draftItems() {
+  const items = await queue.list();
+  return items.filter((i) => i.draft);
+}
+
+function draftLabel(it) {
+  if (it.kind === "media") return "📷 Foto";
+  if (it.kind === "audio") return "🎙️ Nota de voz";
+  if (it.entity === "observation") return "💬 Comentario";
+  if (it.entity === "transcript") return "📝 Transcripción";
+  return it.kind;
+}
+
+async function renderTray() {
+  const drafts = await draftItems();
+  const info = summarize(drafts);
+  $("tray-info").textContent = drafts.length
+    ? `${describeCounts(info.drafts)} en la bandeja. Los borradores no se sincronizan hasta que los asignes a un equipo.`
+    : "No hay capturas sin asignar.";
+  const ul = $("tray-list");
+  ul.innerHTML = "";
+  for (const it of drafts) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span>${draftLabel(it)} · ${(it.created_at || "").slice(11, 19)} </span>`;
+    for (const b of queueItemActions(it)) li.appendChild(b);
+    ul.appendChild(li);
+  }
+  $("tray-assign").disabled = !drafts.length;
+  $("tray-assign").hidden = !drafts.length;
+}
+
+// --- Wizard de asignación de borradores (ADR-0027) ---
+
+const ASSIGN_STEPS = ["capturas", "equipo", "confirmar"];
+let asgWiz = null;
+let asgUi = null;
+let asgDrafts = [];
+let asgFix = null;   // último fix GPS usado para "equipos cercanos"
+
+function asgSet(patch) {
+  asgWiz.set(patch);
+  saveDraft(store, "asignar", asgWiz).catch(() => {});
+}
+
+function asgSteps() {
+  return [
+    {
+      id: "capturas",
+      title: "¿Qué capturas asignas?",
+      validate: (d) => ((d.selected || []).length ? null : "Elige al menos una captura."),
+    },
+    {
+      id: "equipo",
+      title: "¿De qué equipo es?",
+      validate: (d) => (d.assetId ? null : "Elige un equipo."),
+    },
+    {
+      id: "confirmar",
+      title: "Confirma la asignación",
+      finishLabel: "Asignar",
+      validate: (d) => {
+        const open = currentVisit(visits);
+        if (open && open.asset_id !== d.assetId) return `Cierra primero la visita abierta de ${open.asset_name}.`;
+        return null;
+      },
+    },
+  ];
+}
+
+function asgRenderStep(step, data, body, wiz, rerender) {
+  if (step.id === "capturas") {
+    const selected = data.selected || [];
+    body.innerHTML = `<p class="of-status">${asgDrafts.length} captura(s) sin asignar.</p>`
+      + asgDrafts.map((it) => `<label class="of-attr-flag" style="display:block; margin-bottom:.5rem">
+          <input type="checkbox" data-q="${escapeHtml(it.qid)}" ${selected.includes(it.qid) ? "checked" : ""}>
+          ${escapeHtml(draftLabel(it))} · ${escapeHtml((it.created_at || "").slice(11, 19))}</label>`).join("")
+      + `<div class="of-actions"><button type="button" class="of-btn" id="asg-all">Marcar todas</button></div>`;
+    body.querySelectorAll("[data-q]").forEach((el) =>
+      el.addEventListener("change", () => {
+        const set = new Set(data.selected || []);
+        if (el.checked) set.add(el.dataset.q); else set.delete(el.dataset.q);
+        asgSet({ selected: [...set] });
+      }));
+    body.querySelector("#asg-all").addEventListener("click", () => {
+      asgSet({ selected: asgDrafts.map((it) => it.qid) });
+      rerender();
+    });
+    return;
+  }
+  if (step.id === "equipo") {
+    const nearby = nearbyAssets(catalog.assets, asgFix, 5);
+    const card = (a, extra = "") =>
+      `<button type="button" class="of-card-option${data.assetId === a.id ? " active" : ""}" data-a="${escapeHtml(a.id)}">${escapeHtml(a.name || a.id)}${extra}</button>`;
+    body.innerHTML = `${nearby.length ? `<h3 class="of-section-title">Equipos cercanos</h3>${nearby.map((n) => card(n.asset, ` <span class="of-status">${Math.round(n.distance_m)} m</span>`)).join("")}` : ""}
+      <div class="of-field"><label for="asg-q">Buscar equipo</label>
+        <input id="asg-q" maxlength="100" placeholder="Nombre, TAG o ubicación"></div>
+      <div id="asg-results"></div>
+      <div class="of-actions">
+        <button type="button" class="of-btn" id="asg-qr">Escanear QR</button>
+        <button type="button" class="of-btn" id="asg-new">+ Equipo nuevo</button>
+      </div>`;
+    const paint = (list) => {
+      body.querySelector("#asg-results").innerHTML = list.slice(0, 20).map((a) => card(a)).join("")
+        || '<p class="of-status">Sin resultados.</p>';
+      body.querySelectorAll("[data-a]").forEach((b) =>
+        b.addEventListener("click", () => { asgSet({ assetId: b.dataset.a }); rerender(); }));
+    };
+    paint(nearby.map((n) => n.asset));
+    body.querySelector("#asg-q").addEventListener("input", (e) => {
+      const q = e.target.value;
+      paint(q.trim() ? searchAssets(catalog.assets, q, { tagsByAsset: catalogTags() }) : nearby.map((n) => n.asset));
+    });
+    body.querySelector("#asg-qr").addEventListener("click", () => {
+      qrReturn = "asignar";
+      router.navigate("/inspeccionar/qr");
+    });
+    body.querySelector("#asg-new").addEventListener("click", () => {
+      afterCreate = "asignar";
+      router.navigate("/equipos/nuevo");
+    });
+    return;
+  }
+  if (step.id === "confirmar") {
+    const asset = catalog.assets.find((a) => a.id === data.assetId);
+    body.innerHTML = `<div class="of-card">
+      <p><strong>Equipo:</strong> ${escapeHtml(asset?.name || "—")}</p>
+      <p><strong>Capturas:</strong> ${(data.selected || []).length}</p>
+      <p class="of-status">Se abrirá la visita del equipo si no existe y las capturas dejarán de ser borradores.</p>
+    </div>`;
+  }
+}
+
+async function ensureAsgWizard() {
+  asgDrafts = await draftItems();
+  if (!asgFix) {
+    const withGeo = asgDrafts.find((d) => d.doc?.geometry?.coordinates?.length === 2);
+    asgFix = withGeo
+      ? { lon: withGeo.doc.geometry.coordinates[0], lat: withGeo.doc.geometry.coordinates[1] }
+      : await hw.getLocation().catch(() => null);
+  }
+  if (!asgWiz) {
+    asgWiz = createWizard({
+      steps: asgSteps(),
+      data: { selected: asgDrafts.map((d) => d.qid), assetId: null },
+    });
+    asgUi = mountWizard($("asignar-root"), asgWiz, {
+      title: "Asignar capturas",
+      finishLabel: "Asignar",
+      renderStep: asgRenderStep,
+      onClose: () => router.navigate("/bandeja"),
+      onFinish: asgFinish,
+      onStepChange: (id, dir) => {
+        saveDraft(store, "asignar", asgWiz).catch(() => {});
+        if (dir === "next") router.navigate(`/asignar/${id}`);
+        else if (router.depth > 0) router.back();
+        else router.navigate(`/asignar/${id}`, { replace: true });
+      },
+    });
+  }
+}
+
+async function asgFinish(data) {
+  const drafts = (await draftItems()).filter((d) => (data.selected || []).includes(d.qid));
+  if (!drafts.length) throw new Error("No hay capturas para asignar.");
+  const asset = catalog.assets.find((a) => a.id === data.assetId);
+  if (!asset) throw new Error("Equipo no encontrado en el catálogo.");
+  let v = currentVisit(visits);
+  if (!v) {
+    await openVisitFor(asset);
+    v = currentVisit(visits);
+  }
+  const patches = assignDrafts(drafts, v, asset.location || null);
+  for (const p of patches) await queue.update(p.qid, p.patch);
+  await clearDraft(store, "asignar");
+  asgWiz = null;
+  asgUi = null;
+  asgFix = null;
+  setStatus(`✅ ${patches.length} captura(s) asignada(s) a ${asset.name}.`, "ok");
+  log(`asignadas ${patches.length} capturas a ${asset.id}`);
+  await renderQueue();
+  router.navigate("/visita");
 }
 
 // --- Verificación de ficha ---
@@ -767,6 +1095,7 @@ async function saveVerification() {
 // --- Cámara a pantalla completa (ADR-0024) ---
 
 async function openCameraScreen() {
+  updateCamContextLabel();
   if (cam) {
     $("preview").srcObject = cam.stream;
     updateCamControls();
@@ -795,8 +1124,12 @@ async function openCameraScreen() {
   }
 }
 
-function updateCamControls() {
-  $("cam-switch").hidden = cameras.length < 2;
+function updateCamContextLabel() {
+  const v = currentVisit(visits);
+  $("cam-asset-name").textContent = v ? v.asset_name : "Sin asignar";
+}
+
+function updateCamControls() {  $("cam-switch").hidden = cameras.length < 2;
   $("cam-torch").hidden = !cam?.capabilities?.torch;
   const zoomWrap = $("cam-zoom-wrap");
   const zoom = cam?.capabilities?.zoom;
@@ -890,8 +1223,10 @@ function escapeHtml(s) {
 }
 
 async function usePhoto() {
-  if (!pendingPhoto || !currentAsset) return;
-  const type = catalog.types.find((t) => t.id === currentAsset.asset_type_id);
+  if (!pendingPhoto) return;
+  const ctx = captureCtx();
+  const asset = ctx ? currentAsset : null;
+  const type = catalog.types.find((t) => t.id === asset?.asset_type_id);
   const meta = photoMetadata({
     caption: $("conf-caption").value.trim(),
     category: selCategory,
@@ -903,20 +1238,35 @@ async function usePhoto() {
   const fix = pendingPhoto.fix;
   const geom = (fix && fix.lon != null)
     ? { type: "Point", coordinates: [fix.lon, fix.lat] }
-    : (currentAsset?.location || null);
+    : (asset?.location || null);
   const doc = await captureImage(
-    { sessionId: session.id, assetId: currentAsset.id, href: pendingPhoto.href, geometry: geom, metadata: meta },
+    {
+      sessionId: ctx ? ctx.sessionId : null,
+      assetId: ctx ? ctx.assetId : null,
+      href: pendingPhoto.href,
+      geometry: geom,
+      metadata: meta,
+    },
     hw,
   );
   const thumbSrc = pendingPhoto.href;
-  await queue.enqueue({ kind: "media", doc, blob: await blobToStored(pendingPhoto.blob) });
+  await queue.enqueue({
+    kind: "media",
+    draft: !ctx,
+    doc,
+    blob: await blobToStored(pendingPhoto.blob),
+  });
   pendingPhoto = null;
   const thumb = $("cam-thumb");
   thumb.style.backgroundImage = `url(${thumbSrc})`;
   thumb.disabled = false;
   const acc = fix?.accuracy != null ? Math.round(fix.accuracy) : null;
-  setStatus(acc && acc > 100 ? "⚠️ Ubicación aproximada; activa 'Ubicación precisa' en Ajustes." : "✅ Foto encolada.", acc && acc > 100 ? "warn" : "ok");
-  log("foto encolada: " + doc.id + (fix ? ` (GPS${acc ? " ±" + acc + " m" : ""})` : " (ubicación del activo)"));
+  const msg = ctx
+    ? "✅ Foto encolada."
+    : "✅ Foto guardada sin asignar (Bandeja).";
+  setStatus(acc && acc > 100 ? "⚠️ Ubicación aproximada; activa 'Ubicación precisa' en Ajustes." : msg, acc && acc > 100 ? "warn" : "ok");
+  log("foto encolada: " + doc.id + (ctx ? "" : " (sin asignar)") + (fix ? ` (GPS${acc ? " ±" + acc + " m" : ""})` : ""));
+  await renderQueue();
   router.navigate("/camara");
 }
 
@@ -990,10 +1340,12 @@ async function toggleRecording() {
 }
 
 async function enqueueAudioItem(out) {
+  const ctx = captureCtx();
   await queue.enqueue({
     kind: "audio",
-    session_id: session?.id || null,
-    asset_id: currentAsset?.id || null,
+    draft: !ctx,
+    session_id: ctx ? ctx.sessionId : null,
+    asset_id: ctx ? ctx.assetId : null,
     blob: await blobToStored(out.blob),
     mimeType: out.mimeType,
     durationMs: out.durationMs,
@@ -1006,18 +1358,20 @@ async function enqueueAudioItem(out) {
 async function saveTranscript() {
   const text = $("transcript-edit").value.trim();
   if (!text) return;
+  const ctx = captureCtx();
   const doc = recordAudio({
-    sessionId: session?.id,
-    assetId: currentAsset?.id,
+    sessionId: ctx ? ctx.sessionId : null,
+    assetId: ctx ? ctx.assetId : null,
     engine: "edited",
     text,
   });
-  await queue.enqueue({ kind: "doc", entity: "transcript", doc });
+  await queue.enqueue({ kind: "doc", entity: "transcript", doc, draft: !ctx });
   if ($("keep-audio").checked && pendingAudio) {
     await queue.enqueue({
       kind: "audio",
-      session_id: session?.id || null,
-      asset_id: currentAsset?.id || null,
+      draft: !ctx,
+      session_id: ctx ? ctx.sessionId : null,
+      asset_id: ctx ? ctx.assetId : null,
       blob: await blobToStored(pendingAudio.blob),
       mimeType: pendingAudio.mimeType,
       durationMs: pendingAudio.durationMs,
@@ -1028,7 +1382,7 @@ async function saveTranscript() {
   pendingAudio = null;
   $("transcript-area").hidden = true;
   $("transcript-edit").value = "";
-  setStatus("✅ Transcripción encolada.", "ok");
+  setStatus(ctx ? "✅ Transcripción encolada." : "✅ Transcripción guardada sin asignar (Bandeja).", "ok");
   await renderQueue();
 }
 
@@ -1037,10 +1391,15 @@ async function saveTranscript() {
 async function saveComment() {
   const text = $("comment").value.trim();
   if (!text) return;
-  const doc = recordNote({ sessionId: session?.id, assetId: currentAsset?.id, text });
-  await queue.enqueue({ kind: "doc", entity: "observation", doc });
+  const ctx = captureCtx();
+  const doc = recordNote({
+    sessionId: ctx ? ctx.sessionId : null,
+    assetId: ctx ? ctx.assetId : null,
+    text,
+  });
+  await queue.enqueue({ kind: "doc", entity: "observation", doc, draft: !ctx });
   $("comment").value = "";
-  setStatus("✅ Comentario encolado.", "ok");
+  setStatus(ctx ? "✅ Comentario encolado." : "✅ Comentario guardado sin asignar (Bandeja).", "ok");
   log("comentario encolado: " + doc.id);
   await renderQueue();
   router.back();
@@ -1086,17 +1445,28 @@ function stopQr() {
 }
 
 async function resolveAndSelect(value) {
+  let asset = null;
   try {
     const res = await fetch(`${BASE_URL}/resolve?value=${encodeURIComponent(value)}`);
     if (res.ok) {
       const [match] = await res.json();
-      if (match?.asset) { await selectAsset(match.asset); return; }
+      if (match?.asset) asset = match.asset;
     }
   } catch { /* sin conexión: busca en el catálogo local */ }
-  const local = findAssetByTag(catalog.assets, catalog.identifiers, value);
-  if (local) { await selectAsset(local); return; }
-  setStatus(`⚠️ Ningún activo coincide con "${value}".`, "warn");
-  router.navigate("/inspeccionar");
+  if (!asset) asset = findAssetByTag(catalog.assets, catalog.identifiers, value);
+  if (!asset) {
+    setStatus(`⚠️ Ningún activo coincide con "${value}".`, "warn");
+    router.navigate(qrReturn === "asignar" ? "/asignar/equipo" : "/inspeccionar");
+    return;
+  }
+  if (qrReturn === "asignar") {
+    qrReturn = null;
+    asgSet({ assetId: asset.id });
+    if (asgUi) asgUi.render();
+    router.navigate("/asignar/equipo", { replace: true });
+    return;
+  }
+  await selectAsset(asset);
 }
 
 // --- Nuevo activo: wizard de alta (ADR-0025) ---
@@ -1259,6 +1629,13 @@ async function naFinish(data) {
   naUi = null;
   setStatus("✅ Activo enrolado localmente; se enviará al sincronizar.", "ok");
   log("activo enrolado: " + asset.id + " — " + asset.name);
+  if (afterCreate === "asignar") {
+    afterCreate = null;
+    asgSet({ assetId: asset.id });
+    if (asgUi) asgUi.render();
+    router.navigate("/asignar/equipo", { replace: true });
+    return;
+  }
   await selectAsset(asset);
 }
 
@@ -1396,19 +1773,32 @@ async function syncItem(item) {
   }
 }
 
-async function syncAll() {
+// Sincronización por visita (ADR-0027): solo visitas cerradas, resultado por visita.
+async function syncVisits(ids) {
   if (recording) { setStatus("⚠️ Detén la grabación antes de sincronizar.", "warn"); return; }
-  if (syncing) return;
+  if (syncing || !ids.length) return;
   syncing = true;
   setStatus("⏳ Sincronizando…");
   await renderQueue(); // bloquea las acciones de ítems durante el flush
   try {
-    const res = await queue.flush(syncItem);
+    const res = await queue.flushBySession(syncItem, ids);
     log(`sincronización: ${res.synced} ok, ${res.failed} fallidos`);
+    const done = [];
+    for (const sid of ids) {
+      const r = res.sessions[sid] || { synced: 0, failed: 0 };
+      syncResults[sid] = r;
+      const left = (await queue.list()).some((i) => !i.draft && sessionOf(i) === sid);
+      if (r.failed === 0 && !left) done.push(sid);
+    }
+    if (done.length) {
+      visits = pruneSynced(markSynced(visits, done));
+      await saveVisits();
+      syncCurrentFromVisit();
+    }
     if (res.failed) {
       setStatus(`⚠️ ${res.failed} elemento(s) no se pudieron sincronizar; quedan en la cola.`, "warn");
     } else if (res.synced) {
-      setStatus("✅ Sincronización completa.", "ok");
+      setStatus(`✅ Sincronizadas ${done.length} de ${ids.length} visita(s).`, "ok");
       await refreshCatalog();
     } else {
       setStatus("No había pendientes.", "");
@@ -1417,6 +1807,10 @@ async function syncAll() {
     syncing = false;
     await renderQueue();
   }
+}
+
+async function syncAll() {
+  return syncVisits(closedVisits(visits).map((v) => v.id));
 }
 
 // --- Router: una pantalla por paso (ADR-0024) ---
@@ -1460,6 +1854,17 @@ async function onScreenShow(path, prev, param) {
       naWiz.goTo(param || NA_STEPS[0]);
       naUi.render();
       break;
+    case "/capturar":
+      await renderCapture();
+      break;
+    case "/bandeja":
+      await renderTray();
+      break;
+    case "/asignar":
+      await ensureAsgWizard();
+      asgWiz.goTo(param || ASSIGN_STEPS[0]);
+      asgUi.render();
+      break;
     case "/sincronizar":
       await renderQueue();
       break;
@@ -1483,12 +1888,19 @@ function onScreenLeave(prev, next) {
     naWiz = null;
     naUi = null;
   }
+  if (prev.startsWith("/asignar") && !next.startsWith("/asignar")) {
+    asgWiz = null;
+    asgUi = null;
+    asgFix = null;
+    qrReturn = null;
+    afterCreate = null;
+  }
 }
 
 const router = createRouter({
   routes: screens,
   defaultPath: "/inicio",
-  paramRoutes: ["/equipos/nuevo"],
+  paramRoutes: ["/equipos/nuevo", "/asignar"],
   aliases: {
     "/activos": "/inspeccionar",
     "/activos/qr": "/inspeccionar/qr",
@@ -1506,15 +1918,13 @@ const router = createRouter({
     "/visita/verificar": () => (currentVisit(visits) ? null : "/inspeccionar"),
     "/visita/cerrar": () => (currentVisit(visits) ? null : "/inspeccionar"),
     "/visita/cerrada": () => (lastClosed ? null : "/inicio"),
-    "/texto": () => (currentVisit(visits) ? null : "/inspeccionar"),
-    "/camara": () => {
-      if (!currentVisit(visits)) return "/inspeccionar";
-      return consentOk() ? null : "/consentimiento";
-    },
+    "/texto": () => null,
+    "/camara": () => (consentOk() ? null : "/consentimiento"),
     "/camara/confirmar": () => (pendingPhoto ? null : "/camara"),
-    "/voz": () => {
-      if (!currentVisit(visits)) return "/inspeccionar";
-      return consentOk() ? null : "/consentimiento";
+    "/voz": () => (consentOk() ? null : "/consentimiento"),
+    "/asignar": (param) => {
+      if (!(param && ASSIGN_STEPS.includes(param))) return `/asignar/${ASSIGN_STEPS[0]}`;
+      return null;
     },
     "/equipos/nuevo": (param) => (param && NA_STEPS.includes(param) ? null : `/equipos/nuevo/${NA_STEPS[0]}`),
   },
@@ -1525,7 +1935,7 @@ const router = createRouter({
 // --- Eventos ---
 
 $("hdr-back").addEventListener("click", () => router.back());
-$("visit-banner").addEventListener("click", () => router.navigate("/visita"));
+$("visit-banner").addEventListener("click", () => router.navigate(currentVisit(visits) ? "/visita" : "/bandeja"));
 $("queue-badge").addEventListener("click", () => router.navigate("/sincronizar"));
 $("go-assets").addEventListener("click", () => router.navigate("/inspeccionar"));
 $("go-queue").addEventListener("click", () => router.navigate("/sincronizar"));
@@ -1581,8 +1991,25 @@ $("asset-list").addEventListener("click", async (e) => {
   if (asset) await selectAsset(asset);
 });
 $("scan-qr").addEventListener("click", () => router.navigate("/inspeccionar/qr"));
-$("qr-cancel").addEventListener("click", () => router.back());
+$("qr-cancel").addEventListener("click", () => {
+  const back = qrReturn === "asignar" ? "/asignar/equipo" : null;
+  qrReturn = null;
+  if (back) router.navigate(back, { replace: true });
+  else router.back();
+});
 $("new-asset").addEventListener("click", () => router.navigate("/equipos/nuevo"));
+
+// Captura primero: elegir medio y bandeja (ADR-0027).
+$("home-capture").addEventListener("click", () => router.navigate("/capturar"));
+$("home-tray").addEventListener("click", () => router.navigate("/bandeja"));
+$("cap-photo").addEventListener("click", () => {
+  if (requireConsent("/camara")) router.navigate("/camara");
+});
+$("cap-voice").addEventListener("click", () => {
+  if (requireConsent("/voz")) router.navigate("/voz");
+});
+$("cap-text").addEventListener("click", () => router.navigate("/texto"));
+$("tray-assign").addEventListener("click", () => router.navigate("/asignar"));
 
 $("menu-verify").addEventListener("click", () => router.navigate("/visita/verificar"));
 $("menu-photos").addEventListener("click", () => {
@@ -1607,6 +2034,12 @@ $("close-confirm").addEventListener("click", async () => {
   if (!closed) { router.navigate("/inicio"); return; }
   setStatus("Visita cerrada. Queda en la cola para sincronizar.", "ok");
   await renderQueue();
+  if (syncAfterClose) {
+    syncAfterClose = false;
+    router.navigate("/sincronizar", { replace: true });
+    await syncVisits([closed.id]);
+    return;
+  }
   router.navigate("/visita/cerrada", { replace: true });
 });
 $("closed-next").addEventListener("click", () => router.navigate("/inspeccionar"));
@@ -1677,7 +2110,7 @@ $("discard-transcript").addEventListener("click", () => {
   $("transcript-area").hidden = true;
 });
 $("save-comment").addEventListener("click", saveComment);
-$("sync").addEventListener("click", syncAll);
+$("sync-all").addEventListener("click", syncAll);
 
 if (navigator.mediaDevices?.addEventListener) {
   navigator.mediaDevices.addEventListener("devicechange", async () => {
