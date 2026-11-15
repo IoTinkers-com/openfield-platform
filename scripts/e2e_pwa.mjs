@@ -437,7 +437,15 @@ async function main() {
     await waitFor("location.hash === '#/camara/confirmar'", "confirmación");
     await click("#conf-use");
     await waitFor("location.hash === '#/camara'", "vuelta a cámara");
+    // verificación optimista que la cancelación debe revertir
+    await goto("#/visita/verificar");
+    await waitFor("document.querySelectorAll('#verify-form .va-confirm').length > 0", "atributos verificables");
+    await js("(() => { const b = [...document.querySelectorAll('#verify-form .va-confirm')].find((x) => !x.disabled); if (b) b.click(); return true; })()");
+    await click("#save-verify");
+    await waitFor("/Verificación encolada/.test(document.querySelector('#status').textContent)", "verificación encolada", 10000);
     await goto("#/visita");
+    const visitWithVerify = await text("#visit-counts");
+    check("la visita registra la verificación antes de cancelar", /verificación/.test(visitWithVerify || ""), visitWithVerify);
     await click("#visit-abort"); // el arnés acepta el confirm automáticamente
     await waitFor("location.hash === '#/inicio'", "inicio tras cancelar", 10000);
     const afterCancel = await js(`({
@@ -446,6 +454,11 @@ async function main() {
       visit: document.querySelector('#home-visit') ? !document.querySelector('#home-visit').hidden : false,
     })`);
     check("cancelar visita avisa y descarta los datos", /Visita cancelada/.test(afterCancel.status) && !afterCancel.tray && !afterCancel.visit, JSON.stringify(afterCancel));
+    check("cancelar revierte la verificación optimista", /revirtieron 1 verificación/.test(afterCancel.status), afterCancel.status);
+    await goto("#/inspeccionar");
+    await waitFor("document.querySelectorAll('#asset-list [data-asset]').length > 0", "lista tras cancelar");
+    const listAfterCancel = await text("#asset-list");
+    check("el activo vuelve a mostrarse sin verificar en el selector", /0% verificado|Pendiente/.test(listAfterCancel || ""), (listAfterCancel || "").slice(0, 120));
     await goto("#/sincronizar");
     await waitFor("document.querySelector('#sync-summary').textContent.length > 10", "resumen tras cancelar");
     const summaryCancel = await text("#sync-summary");

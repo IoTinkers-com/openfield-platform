@@ -37,7 +37,7 @@
       <button id="go-settings" class="of-btn">Ajustes</button>
     </div>
     <p class="of-status">Flujo por pantallas: el botón/gesto Atrás del teléfono vuelve al paso anterior.</p>
-    <p class="of-status" id="build">build e6.5</p>
+    <p class="of-status" id="build">build e6.6</p>
   </section>
 
   <!-- Aviso de captura y aceptación (ADR-0026) -->
@@ -678,6 +678,16 @@ async function refreshCatalog() {
   renderAssetList();
 }
 
+// Refresca el catálogo si está viejo y hay conexión (evita datos obsoletos al volver al selector).
+const CATALOG_MAX_AGE_MS = 5 * 60 * 1000;
+async function maybeRefreshCatalog() {
+  if (!navigator.onLine) return false;
+  const updated = catalog.updated_at ? Date.parse(catalog.updated_at) : 0;
+  if (updated && Date.now() - updated < CATALOG_MAX_AGE_MS) return false;
+  await refreshCatalog();
+  return true;
+}
+
 // --- Visitas de captura (ADR-0027): 1 visita = 1 sesión = 1 equipo ---
 
 async function loadVisits() {
@@ -759,15 +769,38 @@ async function closeCurrentVisit() {
 
 // Cancela la visita abierta: descarta la visita y sus datos capturados (ADR-0027).
 // Si la sesión ya llegó al servidor, se encola su cierre para no dejarla abierta.
+// Antes de borrar, revierte los efectos optimistas (verificaciones) de esa visita y,
+// si hay conexión, vuelve a leer el catálogo del servidor.
+async function revertOptimisticEffects(items) {
+  const verifies = items.filter((i) => i.kind === "verify" && i.asset_before);
+  if (!verifies.length) return 0;
+  let reverted = 0;
+  for (const it of verifies) {
+    const i = catalog.assets.findIndex((a) => a.id === it.asset_id);
+    if (i >= 0) {
+      catalog.assets[i] = it.asset_before;
+      reverted += 1;
+    }
+  }
+  try {
+    await store.put("kv", { key: "catalog.assets", value: catalog.assets });
+  } catch (_) { /* best effort */ }
+  return reverted;
+}
+
 async function discardVisitData(visitId) {
   const items = await queue.list();
   const own = items.filter((i) => sessionOf(i) === visitId);
   const hadSessionDoc = own.some((i) => i.kind === "doc" && i.entity === "session");
+  const reverted = await revertOptimisticEffects(own);
   for (const it of own) await queue.remove(it.qid);
   if (!hadSessionDoc) {
     await queue.enqueue({ kind: "session-end", session_id: visitId, ended_at: now() });
   }
-  return { removed: own.length, closedRemote: !hadSessionDoc };
+  if (navigator.onLine) {
+    try { await refreshCatalog(); } catch (_) { /* se reintenta al volver a entrar */ }
+  }
+  return { removed: own.length, closedRemote: !hadSessionDoc, reverted };
 }
 
 async function cancelCurrentVisit() {
@@ -788,8 +821,10 @@ async function cancelCurrentVisit() {
   syncCurrentFromVisit();
   lastClosed = null;
   await renderQueue();
-  setStatus(`Visita cancelada. Se descartaron ${res.removed} dato(s).`, "warn");
-  log(`visita cancelada: ${v.id} (${res.removed} ítem(s) descartados)`);
+  renderAssetList();
+  const extra = res.reverted ? ` Se revirtieron ${res.reverted} verificación(es) local(es).` : "";
+  setStatus(`Visita cancelada. Se descartaron ${res.removed} dato(s).${extra}`, "warn");
+  log(`visita cancelada: ${v.id} (${res.removed} ítem(s), ${res.reverted} verificación(es) revertida(s))`);
   router.navigate("/inicio", { replace: true });
   return true;
 }
@@ -1848,6 +1883,7 @@ function openQueueEdit(item) {
     await queue.update(item.qid, { doc });
     dlg.close();
     await renderQueue();
+    renderAssetList(); // el nombre/atributos del activo nuevo se reflejan en el selector
   };
   dlg.showModal();
 }
@@ -1965,6 +2001,7 @@ async function onScreenShow(path, prev, param) {
     case "/inspeccionar":
       renderCatalogInfo();
       renderAssetList();
+      maybeRefreshCatalog(); // si el catálogo tiene más de 5 min y hay red, se actualiza
       break;
     case "/visita":
       await renderAssetMenu();
