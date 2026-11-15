@@ -982,9 +982,11 @@ function asgRenderStep(step, data, body, wiz, rerender) {
   }
   if (step.id === "equipo") {
     const nearby = nearbyAssets(catalog.assets, asgFix, 5);
+    const selected = catalog.assets.find((a) => a.id === data.assetId) || null;
     const card = (a, extra = "") =>
       `<button type="button" class="of-card-option${data.assetId === a.id ? " active" : ""}" data-a="${escapeHtml(a.id)}">${escapeHtml(a.name || a.id)}${extra}</button>`;
-    body.innerHTML = `${nearby.length ? `<h3 class="of-section-title">Equipos cercanos</h3>${nearby.map((n) => card(n.asset, ` <span class="of-status">${Math.round(n.distance_m)} m</span>`)).join("")}` : ""}
+    body.innerHTML = `${selected ? `<p class="of-status ok">Seleccionado: <strong>${escapeHtml(selected.name || selected.id)}</strong></p>` : ""}
+      ${nearby.length ? `<h3 class="of-section-title">Equipos cercanos</h3>${nearby.map((n) => card(n.asset, ` <span class="of-status">${Math.round(n.distance_m)} m</span>`)).join("")}` : ""}
       <div class="of-field"><label for="asg-q">Buscar equipo</label>
         <input id="asg-q" maxlength="100" placeholder="Nombre, TAG o ubicación"></div>
       <div id="asg-results"></div>
@@ -993,7 +995,9 @@ function asgRenderStep(step, data, body, wiz, rerender) {
         <button type="button" class="of-btn" id="asg-new">+ Equipo nuevo</button>
       </div>`;
     const paint = (list) => {
-      body.querySelector("#asg-results").innerHTML = list.slice(0, 20).map((a) => card(a)).join("")
+      // el equipo seleccionado siempre aparece primero (p. ej. uno recién creado sin GPS)
+      const all = selected ? [selected, ...list.filter((a) => a.id !== selected.id)] : list;
+      body.querySelector("#asg-results").innerHTML = all.slice(0, 20).map((a) => card(a)).join("")
         || '<p class="of-status">Sin resultados.</p>';
       body.querySelectorAll("[data-a]").forEach((b) =>
         b.addEventListener("click", () => { asgSet({ assetId: b.dataset.a }); rerender(); }));
@@ -1527,10 +1531,12 @@ async function resolveAndSelect(value) {
   }
   if (qrReturn === "asignar") {
     qrReturn = null;
-    asgSet({ assetId: asset.id });
-    if (asgUi) asgUi.render();
-    router.navigate("/asignar/equipo", { replace: true });
-    return;
+    if (asgWiz) {
+      asgSet({ assetId: asset.id });
+      if (asgUi) asgUi.render();
+      router.navigate("/asignar/equipo", { replace: true });
+      return;
+    }
   }
   await selectAsset(asset);
 }
@@ -1697,10 +1703,12 @@ async function naFinish(data) {
   log("activo enrolado: " + asset.id + " — " + asset.name);
   if (afterCreate === "asignar") {
     afterCreate = null;
-    asgSet({ assetId: asset.id });
-    if (asgUi) asgUi.render();
-    router.navigate("/asignar/equipo", { replace: true });
-    return;
+    if (asgWiz) {
+      asgSet({ assetId: asset.id });
+      if (asgUi) asgUi.render();
+      router.navigate("/asignar/equipo", { replace: true });
+      return;
+    }
   }
   await selectAsset(asset);
 }
@@ -1957,6 +1965,9 @@ async function onScreenShow(path, prev, param) {
   await renderBanner(path);
 }
 
+// Rutas auxiliares a las que se entra desde el wizard de asignación sin abandonarlo.
+const ASSIGN_AUX = ["/inspeccionar/qr", "/equipos/nuevo"];
+
 function onScreenLeave(prev, next) {
   // El stream se mantiene abierto entre cámara y confirmación (ADR-0024).
   if (prev === "/camara" && next !== "/camara/confirmar") stopCamera();
@@ -1964,18 +1975,22 @@ function onScreenLeave(prev, next) {
   if (prev === "/inspeccionar/qr") stopQr();
   if (prev === "/voz") cancelRecording();
   if (prev === "/visita/cerrar") revokeCloseThumbs();
+  const aux = ASSIGN_AUX.some((p) => next.startsWith(p));
   // Al salir del alta de equipo se suelta el wizard; el borrador queda guardado.
-  if (prev.startsWith("/equipos/nuevo") && !next.startsWith("/equipos/nuevo")) {
+  if (prev.startsWith("/equipos/nuevo") && !next.startsWith("/equipos/nuevo") && !aux) {
     naWiz = null;
     naUi = null;
+    afterCreate = null;
   }
-  if (prev.startsWith("/asignar") && !next.startsWith("/asignar")) {
+  // El wizard de asignación sobrevive al QR y al alta de equipo nuevo.
+  if (prev.startsWith("/asignar") && !next.startsWith("/asignar") && !aux) {
     asgWiz = null;
     asgUi = null;
     asgFix = null;
     qrReturn = null;
     afterCreate = null;
   }
+  if (prev.startsWith("/inspeccionar/qr") && !aux) qrReturn = null;
 }
 
 const router = createRouter({
